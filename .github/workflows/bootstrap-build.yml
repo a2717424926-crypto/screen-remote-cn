@@ -33,14 +33,14 @@ jobs:
       - name: Install build tools
         run: |
           brew install cmake ninja meson pkg-config go fmt googletest
-          # Homebrew 4.x refuses `brew install ./foo.rb`; put the pinned
-          # protobuf 28.3 formula into a local tap instead.
-          brew unlink protobuf || true
-          tap_dir="$(brew --repository)/Library/Taps/local/homebrew-cn/Formula"
-          mkdir -p "$tap_dir"
-          cp ./external/adb-mobile/porting/protobuf.rb "$tap_dir/protobuf.rb"
-          brew install local/cn/protobuf
-          protoc --version
+          # adb-mobile pins protobuf 28.3. Homebrew's 28.3 bottle is linked
+          # against the 2024 abseil and crashes with the current one, so use
+          # the official self-contained protoc binary instead.
+          curl -fsSL -o /tmp/protoc.zip \
+            https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-osx-aarch_64.zip
+          unzip -q /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
+          /tmp/protoc/bin/protoc --version
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
