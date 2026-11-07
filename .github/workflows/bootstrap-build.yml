@@ -33,8 +33,13 @@ jobs:
       - name: Install build tools
         run: |
           brew install cmake ninja meson pkg-config go fmt googletest
+          # Homebrew 4.x refuses `brew install ./foo.rb`; put the pinned
+          # protobuf 28.3 formula into a local tap instead.
           brew unlink protobuf || true
-          brew install ./external/adb-mobile/porting/protobuf.rb
+          tap_dir="$(brew --repository)/Library/Taps/local/homebrew-cn/Formula"
+          mkdir -p "$tap_dir"
+          cp ./external/adb-mobile/porting/protobuf.rb "$tap_dir/protobuf.rb"
+          brew install local/cn/protobuf
           protoc --version
 
       - name: Build unsigned IPA
