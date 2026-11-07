@@ -1,0 +1,49 @@
+name: Bootstrap build (CN)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Apply patch
+        run: git apply --verbose ScreenRemote-CN.patch
+
+      - name: Init submodules
+        run: git submodule update --init --recursive
+
+      - name: Select newest Xcode
+        run: |
+          latest="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          echo "Using $latest"
+          sudo xcode-select -s "$latest/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install build tools
+        run: |
+          brew install cmake ninja meson pkg-config go fmt googletest
+          brew unlink protobuf || true
+          brew install ./external/adb-mobile/porting/protobuf.rb
+          protoc --version
+
+      - name: Build unsigned IPA
+        run: bash scripts/build-unsigned-ipa.sh
+
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
+            --title "Screen Remote 中文版（未签名 IPA）" \
+            --notes "自动构建产物，未签名，请使用自己的证书签名后安装。"
