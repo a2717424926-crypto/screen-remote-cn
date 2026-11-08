@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..dc8ada1
+index 0000000..04997a0
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,288 @@
+@@ -0,0 +1,311 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1677,6 +1677,12 @@ index 0000000..dc8ada1
 +    porting/libs/iphoneos/arm64/libtsnet-forwarder.a; do
 +    [ -f "$native_lib" ] || NATIVE_READY=0
 +done
++
++# 旧一轮缓存里的 libadb-full.a 可能是用 Homebrew 的 abseil/protobuf 头编出来的
++# （符号是 absl::lts_2026xxxx），链接时一堆未定义。用标记文件区分：
++# 只有当前流程成功产出的 libadb-full.a 才算可用。
++LIBADB_MARKER="porting/libs/iphoneos/arm64/.libadb-vendored-protobuf28"
++[ -f "$LIBADB_MARKER" ] || NATIVE_READY=0
 +
 +if [ "$NATIVE_READY" = "1" ]; then
 +    log "检测到已缓存的依赖库，跳过原生编译"
@@ -1777,6 +1783,13 @@ index 0000000..dc8ada1
 +        brotli/iphoneos/arm64 \
 +        protobuf/iphoneos/arm64
 +
++    # 这些静态库必须真的出现在 output/iphoneos/arm64，否则 libtool 合并出来
++    # 的 libadb-full.a 会缺 zstd / protobuf / absl 符号，直到 Xcode 链接才报错。
++    for required_lib in libzstd.a liblz4.a libprotobuf.a; do
++        [ -f "$ADB_OUT/$required_lib" ] || fail "adb 依赖缺少 $required_lib（$ADB_OUT）"
++    done
++    ls "$ADB_OUT"/libabsl_*.a >/dev/null 2>&1 || fail "adb 依赖缺少 abseil 静态库"
++
 +    # protobuf 已经编完，现在可以安全地把 abseil 的 log.h 换成 no-op：
 +    # adb 源码的日志宏在新版 abseil 下编不过，而 libprotobuf 不会再重编，
 +    # 所以不会像上一轮那样把 protobuf 自己搞崩。
@@ -1810,6 +1823,15 @@ index 0000000..dc8ada1
 +        (cd "$ADB_OUT" && libtool -static -o libadb-full.a *.a)
 +        ADB_STATUS=$?
 +    fi
++    # 合并后立刻验证关键符号，避免到 Xcode 链接阶段才发现库不完整。
++    if [ "$ADB_STATUS" -eq 0 ]; then
++        for need_sym in _ZSTD_compressStream2 _ZN6google8protobuf8internal18kDescriptorMethodsE; do
++            if ! nm -gU "$ADB_OUT/libadb-full.a" 2>/dev/null | grep -q " $need_sym\$"; then
++                log "libadb-full.a 缺少符号 $need_sym"
++                ADB_STATUS=1
++            fi
++        done
++    fi
 +    if [ "$ADB_STATUS" -eq 0 ]; then
 +        mkdir -p "$ADB_MOBILE/output/include"
 +        cp -av "$ADB_MOBILE/porting/adb/include/"*.h "$ADB_MOBILE/output/include/"
@@ -1831,6 +1853,7 @@ index 0000000..dc8ada1
 +
 +    cp -av "$ADB_OUT/libadb-full.a" porting/libs/iphoneos/arm64/
 +    cp -av "$ADB_MOBILE/output/include/adb_public.h" porting/libs/include/
++    touch "$LIBADB_MARKER"
 +
 +    if [ -f porting/libs/iphoneos/arm64/libSDL3.a ]; then
 +        log "[5/8] SDL3 已缓存，跳过"
