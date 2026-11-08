@@ -1126,10 +1126,22 @@ index 57d2cc0..ef7f4d6 100644
  } 
 \ No newline at end of file
 diff --git a/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift b/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift
-index 64175ad..ddb148b 100644
+index 64175ad..94a53f5 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift	
-@@ -755,6 +755,10 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
+@@ -220,6 +220,11 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
+                 // 我们用 .playback + .mixWithOthers 覆盖,与 scrcpy/VNC 音频共存）。
+                 BackgroundKeepAliveManager.shared.sessionConnected()
+ 
++                // 连接成功后就开始采集会话卡片的预览帧，而不是等到用户点
++                // “最小化”才启动：这样无论用户以何种方式回到列表，卡片上
++                // 都已经是最新画面。
++                ScrcpyPreviewManager.shared.isActive = true
++
+                 // 连接成功后,如果启用了自动重连,保存当前会话
+                 self.saveCurrentSessionIfAutoReconnectEnabled()
+ 
+@@ -755,6 +760,10 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
          isConnecting = false
          connectionStartTime = nil
  
@@ -1140,7 +1152,7 @@ index 64175ad..ddb148b 100644
          // Stop the silent-audio keep-alive engine if it was running —
          // there is nothing left to keep alive once the session is gone.
          BackgroundKeepAliveManager.shared.sessionDisconnected()
-@@ -905,7 +909,7 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
+@@ -905,7 +914,7 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
      /// 获取当前连接的描述信息
      var connectionDescription: String {
          guard let session = currentSession else {
@@ -1163,7 +1175,7 @@ index 7c113c1..5819978 100644
  
                              Text("Receives MP3 audio stream over TCP. Increase buffer if audio breaks.")
 diff --git a/scrcpy-app/Scrcpy Remote/SessionManager.swift b/scrcpy-app/Scrcpy Remote/SessionManager.swift
-index 6a9abd6..64a2400 100644
+index 6a9abd6..d70c805 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionManager.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionManager.swift	
 @@ -8,6 +8,11 @@
@@ -1178,7 +1190,7 @@ index 6a9abd6..64a2400 100644
  
  // VNC压缩等级枚举
  enum VNCCompressionLevel: String, Codable, CaseIterable {
-@@ -909,3 +914,128 @@ class SessionManager {
+@@ -909,3 +914,132 @@ class SessionManager {
          return getActionsForDeviceAndType(deviceId, deviceType: deviceType)
      }
  }
@@ -1232,7 +1244,11 @@ index 6a9abd6..64a2400 100644
 +            queue: .main
 +        ) { [weak self] note in
 +            guard let self = self else { return }
-+            self.isActive = (note.userInfo?["minimized"] as? Bool) ?? false
++            // 只负责“开启”。恢复全屏时不清空、也不停止采集，否则从全屏
++            // 返回列表的一瞬间会先看到空卡片，要等下一帧才有画面。
++            if let minimized = note.userInfo?["minimized"] as? Bool, minimized {
++                self.isActive = true
++            }
 +        }
 +    }
 +
