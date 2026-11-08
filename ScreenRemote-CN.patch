@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..4586254
+index 0000000..cf42602
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,273 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1709,11 +1709,19 @@ index 0000000..4586254
 +        tar -czf "$OSSL_ARCHIVE" -C /tmp openssl-1.1.1w
 +    fi
 +
-+    log "[2/8] 编译 OpenSSL"
-+    make -C porting openssl
++    if [ -f porting/libs/iphoneos/arm64/libssl.a ]; then
++        log "[2/8] OpenSSL 已缓存，跳过"
++    else
++        log "[2/8] 编译 OpenSSL"
++        make -C porting openssl
++    fi
 +
-+    log "[3/8] 编译 libvncclient"
-+    make -C porting vncclient
++    if [ -f porting/libs/iphoneos/arm64/libvncclient.a ]; then
++        log "[3/8] libvncclient 已缓存，跳过"
++    else
++        log "[3/8] 编译 libvncclient"
++        make -C porting vncclient
++    fi
 +
 +    log "[4/8] 编译 libadb（首次约 15-25 分钟）"
 +
@@ -1824,11 +1832,19 @@ index 0000000..4586254
 +    cp -av "$ADB_OUT/libadb-full.a" porting/libs/iphoneos/arm64/
 +    cp -av "$ADB_MOBILE/output/include/adb_public.h" porting/libs/include/
 +
-+    log "[5/8] 编译 SDL3"
-+    make -C porting libsdl
++    if [ -f porting/libs/iphoneos/arm64/libSDL3.a ]; then
++        log "[5/8] SDL3 已缓存，跳过"
++    else
++        log "[5/8] 编译 SDL3"
++        make -C porting libsdl
++    fi
 +
-+    log "[6/8] 编译 FFmpeg（首次约 30-50 分钟）"
-+    make -C porting ffmpeg
++    if [ -f porting/libs/iphoneos/arm64/libavformat.a ]; then
++        log "[6/8] FFmpeg 已缓存，跳过"
++    else
++        log "[6/8] 编译 FFmpeg（首次约 30-50 分钟）"
++        make -C porting ffmpeg
++    fi
 +
 +    # make-ffmpeg.sh 只把 .a / include 拷进 porting/libs，没有带 pkg-config
 +    # 文件；scrcpy 的 meson 配置会报 "Dependency libavformat not found"。
