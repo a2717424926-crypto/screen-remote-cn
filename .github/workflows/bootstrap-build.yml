@@ -36,7 +36,7 @@ jobs:
           python3 -m venv /tmp/protoc-venv
           /tmp/protoc-venv/bin/pip install --quiet grpcio-tools==1.68.1
           mkdir -p /tmp/protoc/bin
-          printf '#!/bin/sh\nexec /tmp/protoc-venv/bin/python -m grpc_tools.protoc "$@"\n' > /tmp/protoc/bin/protoc
+          printf '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "libprotoc 28.3"; exit 0; fi\nexec /tmp/protoc-venv/bin/python -m grpc_tools.protoc "$@"\n' > /tmp/protoc/bin/protoc
           chmod +x /tmp/protoc/bin/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: porting/libs
-          key: native-deps-v11-${{ runner.os }}
+          key: native-deps-v12-${{ runner.os }}
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
@@ -70,15 +70,16 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: porting/libs
-          key: native-deps-v11-${{ runner.os }}
+          key: native-deps-v12-${{ runner.os }}
 
       - name: Publish release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
-            --title "Screen Remote 涓枃鐗堬紙鏈鍚?IPA锛? \
-            --notes "鑷姩鏋勫缓浜х墿锛屾湭绛惧悕锛岃浣跨敤鑷繁鐨勮瘉涔︾鍚嶅悗瀹夎銆?
+            --title "Screen Remote 娑擃厽鏋冮悧鍫礄閺堫亞顒烽崥?IPA閿? \
+            --notes "閼奉亜濮╅弸鍕紦娴溠呭⒖閿涘本婀粵鎯ф倳閿涘矁顕担璺ㄦ暏閼奉亜绻侀惃鍕槈娑旓妇顒烽崥宥呮倵鐎瑰顥婇妴?
+
 
 
 
