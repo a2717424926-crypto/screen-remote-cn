@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..22f3561
+index 0000000..42f8ac8
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,204 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1692,6 +1692,18 @@ index 0000000..22f3561
 +        printf '
 +CMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=/opt/homebrew/bin/protoc"
 +' "$BREW_PREFIX" >> "$ADB_DEFINES"
++    fi
++
++    # OpenSSL 1.1.1w 已从 openssl.org 的 old 源下架，build-libssl.sh 会
++    # 直接失败。用 GitHub 的 tag 克隆后打成它期望的文件名预置进去。
++    OSSL_DIR="external/OpenSSL-for-iPhone"
++    OSSL_ARCHIVE="$OSSL_DIR/openssl-1.1.1w.tar.gz"
++    if [ ! -f "$OSSL_ARCHIVE" ]; then
++        log "准备 OpenSSL 1.1.1w 源码"
++        rm -rf /tmp/openssl-1.1.1w
++        git clone --depth 1 --branch OpenSSL_1_1_1w \
++            https://github.com/openssl/openssl.git /tmp/openssl-1.1.1w
++        tar -czf "$OSSL_ARCHIVE" -C /tmp openssl-1.1.1w
 +    fi
 +
 +    log "[2/8] 编译 OpenSSL"
