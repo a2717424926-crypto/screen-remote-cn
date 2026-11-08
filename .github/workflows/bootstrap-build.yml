@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: porting/libs
-          key: native-deps-v12-${{ runner.os }}
+          key: native-deps-v13-${{ runner.os }}
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
@@ -70,15 +70,16 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: porting/libs
-          key: native-deps-v12-${{ runner.os }}
+          key: native-deps-v13-${{ runner.os }}
 
       - name: Publish release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
-            --title "Screen Remote 娑擃厽鏋冮悧鍫礄閺堫亞顒烽崥?IPA閿? \
-            --notes "閼奉亜濮╅弸鍕紦娴溠呭⒖閿涘本婀粵鎯ф倳閿涘矁顕担璺ㄦ暏閼奉亜绻侀惃鍕槈娑旓妇顒烽崥宥呮倵鐎瑰顥婇妴?
+            --title "Screen Remote 濞戞搩鍘介弸鍐偋閸剛绀勯柡鍫簽椤掔兘宕?IPA闁? \
+            --notes "闁煎浜滄慨鈺呭几閸曨偆绱﹀ù婧犲懎鈷栭柨娑樻湰濠€顓犵驳閹勫€抽柨娑樼焷椤曨剚鎷呯捄銊︽殢闁煎浜滅换渚€鎯冮崟顔炬濞戞棑濡囬鐑藉触瀹ュ懏鍊甸悗鐟邦槼椤ュ﹪濡?
+
 
 
 
