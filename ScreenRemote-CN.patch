@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..c11781c
+index 0000000..4586254
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,241 @@
+@@ -0,0 +1,257 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1684,14 +1684,17 @@ index 0000000..c11781c
 +    log "[1/8] 初始化子模块（首次约 5-10 分钟）"
 +    git submodule update --init --recursive
 +
-+    # adb-mobile 的 CMake 配置需要能正常运行的 protoc 和 Protobuf 的
-+    # CMake 包。protoc 28.3 由 workflow 通过 grpcio-tools 安装；这里让
-+    # adb 的 CMake 使用 Homebrew protobuf 配套的 protoc。
++    # adb 的 .pb.cc 是在构建时由 CMake 调 protoc 现场生成的。protoc 的版本
++    # 必须和最终链接的 libprotobuf.a（仓库自带 28.3）一致，否则生成的代码
++    # 会要求 36.x 的运行时符号，链接时报一堆 google::protobuf::* 未定义。
++    # workflow 用 grpcio-tools 提供 28.x 的 protoc，并放在 PATH 最前面。
 +    ADB_DEFINES="external/adb-mobile/porting/scripts/defines.sh"
++    PROTOC_BIN="$(command -v protoc || true)"
++    [ -n "$PROTOC_BIN" ] || PROTOC_BIN="$BREW_PREFIX/bin/protoc"
 +    if [ -f "$ADB_DEFINES" ]; then
 +        printf '
-+CMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=/opt/homebrew/bin/protoc"
-+' "$BREW_PREFIX" >> "$ADB_DEFINES"
++CMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=%s"
++' "$BREW_PREFIX" "$PROTOC_BIN" >> "$ADB_DEFINES"
 +    fi
 +
 +    # OpenSSL 1.1.1w 已从 openssl.org 的 old 源下架，build-libssl.sh 会
@@ -1740,9 +1743,22 @@ index 0000000..c11781c
 +#include "log.h"
 +ABSL_EOF
 +
-+    ADB_EXTRA_INCLUDES="-I$ADB_PROTOBUF/src -I$ADB_PROTOBUF/third_party/abseil-cpp -I$ABSL_STUB"
++    # 关键：CMake 生成的编译命令里 $(CXX_INCLUDES) 排在 $(CXX_FLAGS) 之前，
++    # 所以把 -I 塞进 CMAKE_CXX_FLAGS 是抢不过 /opt/homebrew/include 的。
++    # make-adb.sh 本来就会把 BoringSSL/fmt 前缀拼到 flags.make 的
++    # CXX_INCLUDES 开头，这里在同一处再前置仓库自带的 protobuf / abseil，
++    # 保证 .pb.cc 用的头文件和 protoc 生成代码、最终静态库都是 28.3。
++    ADB_PROTOBUF_SRC="$ADB_PROTOBUF/src"
++    ADB_ABSL_SRC="$ADB_PROTOBUF/third_party/abseil-cpp"
++    export ADB_PROTOBUF_SRC ADB_ABSL_SRC
 +    if [ -f "$ADB_MAKE" ]; then
-+        perl -0pi -e 's{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL="}{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL= '"$ADB_EXTRA_INCLUDES"'"}' "$ADB_MAKE"
++        python3 -c 'import sys
++p = sys.argv[1]
++s = open(p).read()
++old = "CXX_INCLUDES = -I$BORINGSSL_DIR/include"
++new = "CXX_INCLUDES = -I$ADB_PROTOBUF_SRC -I$ADB_ABSL_SRC -I$BORINGSSL_DIR/include"
++assert old in s, "make-adb.sh anchor not found"
++open(p, "w").write(s.replace(old, new))' "$ADB_MAKE"
 +    fi
 +
 +    # 只需要真机 arm64；模拟器库对归档没有用，省掉两份编译。
@@ -1767,11 +1783,11 @@ index 0000000..c11781c
 +        fi
 +    done
 +
-+    # adb 必须用仓库里的 BoringSSL，且必须用自带的 protobuf 28.3 与配套
-+    # abseil；Homebrew 的 openssl / absl / google 目录会抢在前面，编译期间
-+    # 临时藏起来，结束后恢复。
++    # adb 必须用仓库里的 BoringSSL；Homebrew 的 openssl 头文件目录会抢在
++    # 前面，编译期间临时藏起来，结束后恢复。（protobuf/abseil 不藏，改由
++    # flags.make 里前置 -I 来保证优先级。）
 +    HIDDEN_BREW_INCLUDES=""
-+    for brew_inc in openssl absl google; do
++    for brew_inc in openssl; do
 +        if [ -d "$BREW_PREFIX/include/$brew_inc" ]; then
 +            mv "$BREW_PREFIX/include/$brew_inc" "$BREW_PREFIX/include/$brew_inc.scrcpy-hidden"
 +            HIDDEN_BREW_INCLUDES="$HIDDEN_BREW_INCLUDES $brew_inc"
