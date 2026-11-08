@@ -33,17 +33,11 @@ jobs:
       - name: Install build tools
         run: |
           brew install ninja meson pkg-config go fmt googletest nasm protobuf
-          # adb-mobile pins protobuf 28.3. Homebrew's 28.3 bottle is linked
-          # against the 2024 abseil and crashes with the current one, so use
-          # the official self-contained protoc binary instead.
           curl -fsSL -o /tmp/protoc.zip \
             https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-osx-aarch_64.zip
           unzip -q /tmp/protoc.zip -d /tmp/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
-          # CMake 4 removed compatibility with cmake_minimum_required(<3.5),
-          # which libvncserver and adb-mobile still use. Pin CMake 3.31 for
-          # the whole dependency build.
           curl -fsSL -o /tmp/cmake.tar.gz \
             https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
           tar -xzf /tmp/cmake.tar.gz -C /tmp
@@ -52,7 +46,7 @@ jobs:
 
       - name: Prepare tsnet go.mod
         run: |
-          # 鏍圭洰褰?.gitignore 鐨?*.mod* 鎶?porting/libtsnet/go.mod 涓€璧峰拷鐣ヤ簡锛?          # 涓婃父浠撳簱閲屽彧鏈?go.sum銆傝繖閲屾寜婧愮爜閲岀殑 module 璺緞琛ュ嚭鏉ャ€?          if [ ! -f porting/libtsnet/go.mod ]; then
+          if [ ! -f porting/libtsnet/go.mod ]; then
             cd porting/libtsnet
             go mod init me.wsen.scrcpy-tsnet
             go mod edit -go=1.23
@@ -64,7 +58,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: porting/libs
-          key: native-deps-v4-${{ runner.os }}
+          key: native-deps-v5-${{ runner.os }}
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
@@ -75,13 +69,12 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: porting/libs
-          key: native-deps-v4-${{ runner.os }}
+          key: native-deps-v5-${{ runner.os }}
 
       - name: Publish release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
-            --title "Screen Remote 涓枃鐗堬紙鏈鍚?IPA锛? \
-            --notes "鑷姩鏋勫缓浜х墿锛屾湭绛惧悕锛岃浣跨敤鑷繁鐨勮瘉涔︾鍚嶅悗瀹夎銆?
-
+            --title "Screen Remote 中文版（未签名 IPA）" \
+            --notes "自动构建产物，未签名，请使用自己的证书签名后安装。"
