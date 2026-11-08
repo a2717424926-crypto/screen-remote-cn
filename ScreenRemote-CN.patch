@@ -546,15 +546,14 @@ index bd8a75d..d6f0b0f 100644
  
  @required
 diff --git a/scrcpy-app/Scrcpy Remote/ScrcpyCommon.m b/scrcpy-app/Scrcpy Remote/ScrcpyCommon.m
-index f7eb737..08b3403 100644
+index f7eb737..ce97df3 100644
 --- a/scrcpy-app/Scrcpy Remote/ScrcpyCommon.m	
 +++ b/scrcpy-app/Scrcpy Remote/ScrcpyCommon.m	
-@@ -7,6 +7,104 @@
+@@ -7,6 +7,109 @@
  
  #import "ScrcpyCommon.h"
  #import <Foundation/Foundation.h>
 +#import <UIKit/UIKit.h>
-+#import "Scrcpy_Remote-Swift.h"
 +
 +#pragma mark - Mirror Window
 +
@@ -615,10 +614,16 @@ index f7eb737..08b3403 100644
 +static void ScrcpyApplyMirrorWindowMinimized(BOOL minimized) {
 +    UIWindow *mirrorWindow = ScrcpyFindMirrorWindow();
 +    UIWindow *appWindow = ScrcpyFindHostAppWindow();
-+    ScrcpyPreviewManager *preview = [ScrcpyPreviewManager shared];
 +
-+    // The preview only runs while the Sessions screen is on screen.
-+    preview.isActive = minimized;
++    // This file is compiled into both the app and the VNCClient framework, and
++    // only the app has the generated Swift header. Use a notification so the
++    // shared Objective-C file never has to import Scrcpy_Remote-Swift.h.
++    // ScrcpyPreviewManager observes it and enables capture only while the
++    // Sessions screen is showing the preview.
++    [[NSNotificationCenter defaultCenter]
++        postNotificationName:@"ScrcpyMirrorMinimizedChanged"
++                      object:nil
++                    userInfo:@{@"minimized": @(minimized)}];
 +
 +    if (minimized) {
 +        // Promote the SwiftUI window first so the app never ends up with a
@@ -990,7 +995,7 @@ index 7c113c1..5819978 100644
  
                              Text("Receives MP3 audio stream over TCP. Increase buffer if audio breaks.")
 diff --git a/scrcpy-app/Scrcpy Remote/SessionManager.swift b/scrcpy-app/Scrcpy Remote/SessionManager.swift
-index 6a9abd6..a3fff36 100644
+index 6a9abd6..64a2400 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionManager.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionManager.swift	
 @@ -8,6 +8,11 @@
@@ -1005,7 +1010,7 @@ index 6a9abd6..a3fff36 100644
  
  // VNC压缩等级枚举
  enum VNCCompressionLevel: String, Codable, CaseIterable {
-@@ -909,3 +914,117 @@ class SessionManager {
+@@ -909,3 +914,128 @@ class SessionManager {
          return getActionsForDeviceAndType(deviceId, deviceType: deviceType)
      }
  }
@@ -1050,6 +1055,17 @@ index 6a9abd6..a3fff36 100644
 +
 +    private override init() {
 +        super.init()
++        // ScrcpyCommon.m is shared with the VNCClient framework target and
++        // cannot import the app's generated Swift header, so it tells us about
++        // minimise/restore through a notification instead.
++        NotificationCenter.default.addObserver(
++            forName: Notification.Name("ScrcpyMirrorMinimizedChanged"),
++            object: nil,
++            queue: .main
++        ) { [weak self] note in
++            guard let self = self else { return }
++            self.isActive = (note.userInfo?["minimized"] as? Bool) ?? false
++        }
 +    }
 +
 +    /// Called from the decoder thread for every hardware-decoded frame.
