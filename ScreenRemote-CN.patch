@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..78a3acc
+index 0000000..2a534ea
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,174 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1701,6 +1701,29 @@ index 0000000..78a3acc
 +    make -C porting vncclient
 +
 +    log "[4/8] 编译 libadb（首次约 15-25 分钟）"
++    # 现代 abseil 与仓库里 pin 的 adb 源码日志宏不兼容（ABSL_LOG 展开成
++    # 未定义标识符）。放一个只覆盖 absl/log 的 no-op shim 到 include 最前面。
++    ABSL_STUB="$PWD/build/adb-absl-stub"
++    mkdir -p "$ABSL_STUB/absl/log"
++    cat > "$ABSL_STUB/absl/log/log.h" <<'ABSL_EOF'
++#pragma once
++#include <iostream>
++#define ABSL_LOG(severity) if (false) std::cerr
++#define ABSL_LOG_IF(severity, condition) if (false) std::cerr
++#define ABSL_CHECK(condition) if (!(condition)) std::cerr
++#define ABSL_DCHECK(condition) if (false) std::cerr
++#define ABSL_CHECK_OK(status) if (false) std::cerr
++#define ABSL_DCHECK_OK(status) if (false) std::cerr
++ABSL_EOF
++    cat > "$ABSL_STUB/absl/log/check.h" <<'ABSL_EOF'
++#pragma once
++#include "log.h"
++ABSL_EOF
++    ADB_MAKE="external/adb-mobile/porting/scripts/make-adb.sh"
++    if [ -f "$ADB_MAKE" ]; then
++        perl -0pi -e 's{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL="}{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL= -I'"$ABSL_STUB"'"}' "$ADB_MAKE"
++    fi
++
 +    # Homebrew protobuf 把 /opt/homebrew/include 带进编译路径，那里同时有
 +    # Homebrew 的 OpenSSL 头；adb 必须用仓库里的 BoringSSL，否则
 +    # openssl/xxx 会和 bssl 冲突。编译 libadb 期间临时藏起它。
