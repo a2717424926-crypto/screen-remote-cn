@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..dc93d4f
+index 0000000..e7e58eb
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,432 @@
+@@ -0,0 +1,467 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1872,6 +1872,32 @@ index 0000000..dc93d4f
 +        fi
 +    done
 +
++    # android-tools 用的是 find_package(Protobuf CONFIG)，protobuf-config.cmake
++    # 会把 Protobuf_PROTOC_EXECUTABLE 强制指向 Homebrew 自带的 protoc，
++    # 覆盖命令行 -D。于是 .pb.cc 用 36.x 生成，与内置 28.3 头文件冲突
++    # （#error "gencode is built with an incompatible version"）。
++    # 这里在编译 adb 期间把 Homebrew protoc 的真实文件换成 28.3 包装器。
++    SWAPPED_PROTOC=""
++    PROTOC_SEEN=""
++    for protoc_cand in "$BREW_PREFIX/bin/protoc" "$BREW_PREFIX"/Cellar/protobuf/*/bin/protoc; do
++        [ -e "$protoc_cand" ] || continue
++        protoc_real="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$protoc_cand")"
++        case " $PROTOC_SEEN " in
++            *" $protoc_real "*) continue ;;
++        esac
++        PROTOC_SEEN="$PROTOC_SEEN $protoc_real"
++        [ -x "$protoc_real" ] || continue
++        [ -e "$protoc_real.scrcpy-hidden" ] && continue
++        mv "$protoc_real" "$protoc_real.scrcpy-hidden"
++        cat > "$protoc_real" <<PROTOC_EOF
++#!/bin/sh
++exec "$PROTOC_BIN" "\$@"
++PROTOC_EOF
++        chmod +x "$protoc_real"
++        SWAPPED_PROTOC="$SWAPPED_PROTOC $protoc_real"
++        log "已把 Homebrew protoc 临时指向 28.3 包装器：$PROTOC_BIN"
++    done
++
 +    set +e
 +    make -C "$ADB_MOBILE/porting" adb/iphoneos/arm64
 +    ADB_STATUS=$?
@@ -1887,7 +1913,7 @@ index 0000000..dc93d4f
 +        mkdir -p "$BUILD_DIR"
 +        NM_DUMP="$BUILD_DIR/libadb-symbols.txt"
 +        nm -gU "$ADB_OUT/libadb-full.a" > "$NM_DUMP" 2>/dev/null || true
-+        for need_sym in ZSTD_compressStream2 google8protobuf absl; do
++        for need_sym in ZSTD_compressStream2 google8protobuf absl adb_commandline; do
 +            if ! grep -q -- "$need_sym" "$NM_DUMP"; then
 +                log "libadb-full.a 缺少符号 $need_sym"
 +                ADB_STATUS=1
@@ -1900,6 +1926,15 @@ index 0000000..dc93d4f
 +        ADB_STATUS=$?
 +    fi
 +    set -e
++
++    if [ -n "$SWAPPED_PROTOC" ]; then
++        for protoc_swapped in $SWAPPED_PROTOC; do
++            if [ -f "$protoc_swapped.scrcpy-hidden" ]; then
++                rm -f "$protoc_swapped"
++                mv "$protoc_swapped.scrcpy-hidden" "$protoc_swapped"
++            fi
++        done
++    fi
 +
 +    for brew_inc in $HIDDEN_BREW_INCLUDES; do
 +        if [ -d "$BREW_PREFIX/include/$brew_inc.scrcpy-hidden" ]; then
