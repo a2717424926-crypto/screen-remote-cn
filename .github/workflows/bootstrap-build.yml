@@ -32,7 +32,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install cmake ninja meson pkg-config go fmt googletest
+          brew install ninja meson pkg-config go fmt googletest
           # adb-mobile pins protobuf 28.3. Homebrew's 28.3 bottle is linked
           # against the 2024 abseil and crashes with the current one, so use
           # the official self-contained protoc binary instead.
@@ -41,6 +41,14 @@ jobs:
           unzip -q /tmp/protoc.zip -d /tmp/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
+          # CMake 4 removed compatibility with cmake_minimum_required(<3.5),
+          # which libvncserver and adb-mobile still use. Pin CMake 3.31 for
+          # the whole dependency build.
+          curl -fsSL -o /tmp/cmake.tar.gz \
+            https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
+          tar -xzf /tmp/cmake.tar.gz -C /tmp
+          echo "/tmp/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
+          /tmp/cmake-3.31.6-macos-universal/CMake.app/Contents/bin/cmake --version
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
