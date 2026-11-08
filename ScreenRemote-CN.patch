@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..2e31f50
+index 0000000..3a73e33
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,318 @@
+@@ -0,0 +1,341 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1778,12 +1778,30 @@ index 0000000..2e31f50
 +    }
 +
 +    # 只需要真机 arm64；模拟器库对归档没有用，省掉两份编译。
++    # 各依赖产物只要已经在 output/iphoneos/arm64 里就跳过重建（CI 缓存会保留
++    # 该目录），但 protobuf 的头文件版本仍必须钉在 v28.3 / abseil 20240722。
 +    log "编译 adb 依赖（lz4 / zstd / brotli / protobuf 28.3，仅 iphoneos/arm64）"
-+    make -C "$ADB_MOBILE/porting" \
-+        lz4/iphoneos/arm64 \
-+        zstd/iphoneos/arm64 \
-+        brotli/iphoneos/arm64 \
-+        protobuf/iphoneos/arm64
++    build_adb_dep() {
++        local dep="$1" probe="$2"
++        # shellcheck disable=SC2086
++        if ls $ADB_OUT/$probe >/dev/null 2>&1; then
++            log "adb 依赖 $dep 已有产物，跳过重建"
++            return 0
++        fi
++        make -C "$ADB_MOBILE/porting" "$dep/iphoneos/arm64"
++    }
++    build_adb_dep lz4 "liblz4.a"
++    build_adb_dep zstd "libzstd.a"
++    build_adb_dep brotli "libbrotli*.a"
++    if ls "$ADB_OUT"/libabsl_*.a >/dev/null 2>&1 && [ -f "$ADB_OUT/libprotobuf.a" ]; then
++        log "adb 依赖 protobuf 已有产物，仅校正源码版本"
++        ( cd "$ADB_PROTOBUF" && git checkout -q v28.3 && git submodule -q update --init --recursive ) \
++            || fail "无法把内置 protobuf 切换到 v28.3"
++        ( cd "$ADB_PROTOBUF/third_party/abseil-cpp" && git checkout -q 20240722.0 ) \
++            || fail "无法把内置 abseil 切换到 20240722.0"
++    else
++        make -C "$ADB_MOBILE/porting" protobuf/iphoneos/arm64
++    fi
 +
 +    # 这些静态库必须真的出现在 output/iphoneos/arm64，否则 libtool 合并出来
 +    # 的 libadb-full.a 会缺 zstd / protobuf / absl 符号，直到 Xcode 链接才报错。
@@ -1824,9 +1842,14 @@ index 0000000..2e31f50
 +        ADB_STATUS=$?
 +    fi
 +    # 合并后立刻验证关键符号，避免到 Xcode 链接阶段才发现库不完整。
++    # 注意：Mach-O 的符号名统一多一个下划线（C++ 的 _ZN... 变成 __ZN...），
++    # 所以这里只做“子串存在”判断，别写死前导空格。
 +    if [ "$ADB_STATUS" -eq 0 ]; then
-+        for need_sym in _ZSTD_compressStream2 _ZN6google8protobuf8internal18kDescriptorMethodsE; do
-+            if ! nm -gU "$ADB_OUT/libadb-full.a" 2>/dev/null | grep -q " $need_sym\$"; then
++        mkdir -p "$BUILD_DIR"
++        NM_DUMP="$BUILD_DIR/libadb-symbols.txt"
++        nm -gU "$ADB_OUT/libadb-full.a" > "$NM_DUMP" 2>/dev/null || true
++        for need_sym in ZSTD_compressStream2 google8protobuf absl; do
++            if ! grep -q -- "$need_sym" "$NM_DUMP"; then
 +                log "libadb-full.a 缺少符号 $need_sym"
 +                ADB_STATUS=1
 +            fi
