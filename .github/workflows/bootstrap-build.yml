@@ -38,11 +38,10 @@ jobs:
           unzip -q /tmp/protoc.zip -d /tmp/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
-          curl -fsSL --retry 5 --retry-delay 5 -o /tmp/cmake.tar.gz \
-            https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
-          tar -xzf /tmp/cmake.tar.gz -C /tmp
-          echo "/tmp/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
-          /tmp/cmake-3.31.6-macos-universal/CMake.app/Contents/bin/cmake --version
+          python3 -m venv /tmp/cmake-venv
+          /tmp/cmake-venv/bin/pip install --quiet cmake==3.31.6
+          echo "/tmp/cmake-venv/bin" >> "$GITHUB_PATH"
+          /tmp/cmake-venv/bin/cmake --version
 
       - name: Prepare tsnet go.mod
         run: |
