@@ -1433,10 +1433,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..c226933
+index 0000000..a33666b
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,111 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1500,6 +1500,19 @@ index 0000000..c226933
 +
 +log "[6/8] 编译 FFmpeg（首次约 30-50 分钟）"
 +make -C porting ffmpeg
++
++# make-ffmpeg.sh 只把 .a / include 拷进 porting/libs，没有带 pkg-config 文件；
++# scrcpy 的 meson 配置会报 "Dependency libavformat not found"。这里补上。
++log "复制 FFmpeg pkg-config 文件（scrcpy meson 配置需要）"
++mkdir -p porting/libs/lib/pkgconfig
++for ff_prefix in \
++    porting/build/ffmpeg/iphoneos-arm64 \
++    porting/build/ffmpeg/iphonesimulator-arm64 \
++    porting/build/ffmpeg/iphonesimulator-x86_64; do
++    if [ -d "$ff_prefix/lib/pkgconfig" ]; then
++        cp -f "$ff_prefix"/lib/pkgconfig/*.pc porting/libs/lib/pkgconfig/ 2>/dev/null || true
++    fi
++done
 +
 +log "[7/8] 编译 scrcpy 静态库"
 +make -C porting scrcpy
