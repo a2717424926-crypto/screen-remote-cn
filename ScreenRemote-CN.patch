@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..ff0464e
+index 0000000..dc93d4f
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,380 @@
+@@ -0,0 +1,432 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1950,6 +1950,58 @@ index 0000000..ff0464e
 +            cp -f "$ff_prefix"/lib/pkgconfig/*.pc porting/libs/lib/pkgconfig/ 2>/dev/null || true
 +        fi
 +    done
++
++    # 命中缓存时 porting/build/ffmpeg 不存在，.pc 可能一个都没拷到。用已安装
++    # 头文件里的版本号现场补齐（只补缺失的），否则 meson 会因为找不到依赖而
++    # 直接失败，scrcpy 静态库也就不会重建。
++    ffmpeg_pc() {
++        local pkg_name="$1"
++        local hdr="porting/libs/include/${pkg_name}/version.h"
++        local pc_file="porting/libs/lib/pkgconfig/${pkg_name}.pc"
++        [ -f "$hdr" ] || return 0
++        [ -f "$pc_file" ] && return 0
++        local v_major v_minor v_micro
++        v_major=$(awk '/_VERSION_MAJOR /{print $3; exit}' "$hdr")
++        v_minor=$(awk '/_VERSION_MINOR /{print $3; exit}' "$hdr")
++        v_micro=$(awk '/_VERSION_MICRO /{print $3; exit}' "$hdr")
++        [ -n "$v_major" ] || return 0
++        cat > "$pc_file" <<PC_EOF
++prefix=$ROOT/porting/libs
++exec_prefix=\${prefix}
++libdir=\${prefix}/iphoneos/arm64
++includedir=\${prefix}/include
++
++Name: ${pkg_name}
++Description: FFmpeg ${pkg_name} library
++Version: ${v_major}.${v_minor}.${v_micro}
++Libs: -L\${libdir} -l${pkg_name}
++Cflags: -I\${includedir}
++PC_EOF
++    }
++    for ffmpeg_pkg in libavformat libavcodec libavutil libswscale libswresample libavdevice libavfilter; do
++        ffmpeg_pc "$ffmpeg_pkg"
++    done
++
++    # 同理补 SDL3 的 .pc（版本从头文件读）。
++    if [ ! -f porting/libs/lib/pkgconfig/sdl3.pc ] \
++        && [ -f porting/libs/include/SDL3/SDL_version.h ]; then
++        SDL3_VER="$(awk '/^#define SDL_MAJOR_VERSION /{maj=$3} /^#define SDL_MINOR_VERSION /{min=$3} /^#define SDL_MICRO_VERSION /{mic=$3} END{print maj"."min"."mic}' \
++            porting/libs/include/SDL3/SDL_version.h)"
++        if [ -n "$SDL3_VER" ] && [ "$SDL3_VER" != ".." ]; then
++            cat > porting/libs/lib/pkgconfig/sdl3.pc <<PC_EOF
++prefix=$ROOT/porting/libs
++exec_prefix=\${prefix}
++libdir=\${prefix}/iphoneos/arm64
++includedir=\${prefix}/include
++
++Name: sdl3
++Description: Simple DirectMedia Layer 3
++Version: ${SDL3_VER}
++Libs: -L\${libdir} -lSDL3
++Cflags: -I\${includedir} -I\${includedir}/SDL3
++PC_EOF
++        fi
++    fi
 +
 +    log "[7/8] 编译 scrcpy 静态库"
 +    make -C porting scrcpy
