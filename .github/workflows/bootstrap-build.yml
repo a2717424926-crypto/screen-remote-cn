@@ -32,7 +32,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install ninja meson pkg-config go fmt googletest
+          brew install ninja meson pkg-config go fmt googletest nasm
           # adb-mobile pins protobuf 28.3. Homebrew's 28.3 bottle is linked
           # against the 2024 abseil and crashes with the current one, so use
           # the official self-contained protoc binary instead.
