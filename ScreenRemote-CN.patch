@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..3a73e33
+index 0000000..a69637d
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,341 @@
+@@ -0,0 +1,347 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1777,6 +1777,12 @@ index 0000000..3a73e33
 +        SWAPPED_HEADERS="$SWAPPED_HEADERS $name"
 +    }
 +
++    # 关键：porting/Makefile 的 `dep/iphoneos/arm64` 规则用的是
++    # OUTPUT=../output（相对 external/adb-mobile/porting），而全新 checkout
++    # 里这个目录不存在 —— defines.sh 的 `cd ../output` 会静默失败，随后
++    # 所有静态库都被 cp 到 "/iphoneos/arm64"。必须先建好该目录。
++    mkdir -p "$ADB_MOBILE/output" "$ADB_OUT"
++
 +    # 只需要真机 arm64；模拟器库对归档没有用，省掉两份编译。
 +    # 各依赖产物只要已经在 output/iphoneos/arm64 里就跳过重建（CI 缓存会保留
 +    # 该目录），但 protobuf 的头文件版本仍必须钉在 v28.3 / abseil 20240722。
@@ -1806,7 +1812,7 @@ index 0000000..3a73e33
 +    # 这些静态库必须真的出现在 output/iphoneos/arm64，否则 libtool 合并出来
 +    # 的 libadb-full.a 会缺 zstd / protobuf / absl 符号，直到 Xcode 链接才报错。
 +    for required_lib in libzstd.a liblz4.a libprotobuf.a; do
-+        [ -f "$ADB_OUT/$required_lib" ] || fail "adb 依赖缺少 $required_lib（$ADB_OUT）"
++        [ -f "$ADB_OUT/$required_lib" ] || fail "adb 依赖缺少 ${required_lib}（${ADB_OUT}）"
 +    done
 +    ls "$ADB_OUT"/libabsl_*.a >/dev/null 2>&1 || fail "adb 依赖缺少 abseil 静态库"
 +
