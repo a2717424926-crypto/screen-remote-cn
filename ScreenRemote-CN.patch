@@ -245,7 +245,7 @@ index 8205815..dadcd2c 100644
          AVSampleBufferDisplayLayer *displayLayer = GetSampleBufferDisplayLayer();
          if (!displayLayer) {
 diff --git a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj b/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj
-index 92ac171..042b5c5 100644
+index 92ac171..94405cb 100644
 --- a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj	
 +++ b/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj	
 @@ -798,8 +798,8 @@
@@ -259,6 +259,19 @@ index 92ac171..042b5c5 100644
  				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
  				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
  				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+@@ -814,11 +814,11 @@
+ 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../porting/libs/$(PLATFORM_NAME)/$(ARCHS)";
+ 				MARKETING_VERSION = 4.6.0;
+ 				OTHER_LDFLAGS = (
+-					"-ladb-full",
+ 					"-framework",
+ 					CoreBluetooth,
+ 					"-ObjC",
+ 					"-lscrcpy",
++					"-ladb-full",
+ 					"-ltsnet-forwarder",
+ 					"-lavfilter",
+ 					"-lswscale",
 @@ -859,8 +859,8 @@
  				INFOPLIST_FILE = "Scrcpy-Remote-Info.plist";
  				INFOPLIST_KEY_CFBundleDisplayName = "Screen Remote";
@@ -270,6 +283,19 @@ index 92ac171..042b5c5 100644
  				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
  				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
  				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+@@ -875,11 +875,11 @@
+ 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../porting/libs/$(PLATFORM_NAME)/$(ARCHS)";
+ 				MARKETING_VERSION = 4.6.0;
+ 				OTHER_LDFLAGS = (
+-					"-ladb-full",
+ 					"-framework",
+ 					CoreBluetooth,
+ 					"-ObjC",
+ 					"-lscrcpy",
++					"-ladb-full",
+ 					"-ltsnet-forwarder",
+ 					"-lavfilter",
+ 					"-lswscale",
 diff --git a/scrcpy-app/Scrcpy Remote/ActionCreationComponents.swift b/scrcpy-app/Scrcpy Remote/ActionCreationComponents.swift
 index 31f3d84..e6346bc 100644
 --- a/scrcpy-app/Scrcpy Remote/ActionCreationComponents.swift	
