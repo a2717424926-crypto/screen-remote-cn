@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..42f8ac8
+index 0000000..c11781c
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,241 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1714,9 +1714,15 @@ index 0000000..42f8ac8
 +
 +    log "[4/8] 编译 libadb（首次约 15-25 分钟）"
 +
-+    # 现代 abseil 与仓库里 pin 的 adb 源码日志宏不兼容（ABSL_LOG 展开成
-+    # 未定义标识符）。只替换 Homebrew 的 log.h，编译完恢复；不要动
-+    # protobuf 自带的 abseil 源码，否则 libprotobuf 自己会编译失败。
++    ADB_MOBILE="external/adb-mobile"
++    ADB_MAKE="$ADB_MOBILE/porting/scripts/make-adb.sh"
++    ADB_PROTOBUF="$PWD/$ADB_MOBILE/external/protobuf"
++    ADB_OUT="$ADB_MOBILE/output/iphoneos/arm64"
++
++    # adb 的 .pb.cc 必须和最终合并进 libadb-full.a 的 protobuf 静态库同版本。
++    # 仓库自带 protobuf 28.3（make-protobuf.sh 会 checkout v28.3），而
++    # Homebrew 上已经是 36.x。用 36.x 头文件编译、链接 28.3 静态库，会得到
++    # 一堆 "google::protobuf::* 符号找不到"。这里强制使用自带 28.3 头文件。
 +    ABSL_STUB="$ROOT/build/adb-absl-stub"
 +    mkdir -p "$ABSL_STUB/absl/log"
 +    cat > "$ABSL_STUB/absl/log/log.h" <<'ABSL_EOF'
@@ -1734,42 +1740,73 @@ index 0000000..42f8ac8
 +#include "log.h"
 +ABSL_EOF
 +
-+    ADB_MAKE="external/adb-mobile/porting/scripts/make-adb.sh"
++    ADB_EXTRA_INCLUDES="-I$ADB_PROTOBUF/src -I$ADB_PROTOBUF/third_party/abseil-cpp -I$ABSL_STUB"
 +    if [ -f "$ADB_MAKE" ]; then
-+        perl -0pi -e 's{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL="}{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL= -I'"$ABSL_STUB"'"}' "$ADB_MAKE"
++        perl -0pi -e 's{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL="}{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL= '"$ADB_EXTRA_INCLUDES"'"}' "$ADB_MAKE"
 +    fi
 +
++    # 只需要真机 arm64；模拟器库对归档没有用，省掉两份编译。
++    log "编译 adb 依赖（lz4 / zstd / brotli / protobuf 28.3，仅 iphoneos/arm64）"
++    make -C "$ADB_MOBILE/porting" \
++        lz4/iphoneos/arm64 \
++        zstd/iphoneos/arm64 \
++        brotli/iphoneos/arm64 \
++        protobuf/iphoneos/arm64
++
++    # protobuf 已经编完，现在可以安全地把 abseil 的 log.h 换成 no-op：
++    # adb 源码的日志宏在新版 abseil 下编不过，而 libprotobuf 不会再重编，
++    # 所以不会像上一轮那样把 protobuf 自己搞崩。
 +    ABSL_LOG_FILES=""
-+    HOMEBREW_ABSL_LOG="$BREW_PREFIX/include/absl/log/log.h"
-+    if [ -f "$HOMEBREW_ABSL_LOG" ]; then
-+        ABSL_LOG_FILES="$HOMEBREW_ABSL_LOG"
-+        cp "$HOMEBREW_ABSL_LOG" "$HOMEBREW_ABSL_LOG.scrcpy-backup"
-+        cp "$ABSL_STUB/absl/log/log.h" "$HOMEBREW_ABSL_LOG"
-+    fi
++    for absl_log in \
++        "$BREW_PREFIX/include/absl/log/log.h" \
++        "$ADB_PROTOBUF/third_party/abseil-cpp/absl/log/log.h"; do
++        if [ -f "$absl_log" ]; then
++            cp "$absl_log" "$absl_log.scrcpy-backup"
++            cp "$ABSL_STUB/absl/log/log.h" "$absl_log"
++            ABSL_LOG_FILES="$ABSL_LOG_FILES $absl_log"
++        fi
++    done
 +
-+    # Homebrew protobuf 把 /opt/homebrew/include 带进编译路径，那里同时有
-+    # Homebrew 的 OpenSSL 头；adb 必须用仓库里的 BoringSSL。编译期间临时
-+    # 藏起 Homebrew 的 openssl 目录。
-+    HIDDEN_OPENSSL=""
-+    if [ -d "$BREW_PREFIX/include/openssl" ]; then
-+        HIDDEN_OPENSSL="$BREW_PREFIX/include/openssl.scrcpy-hidden"
-+        mv "$BREW_PREFIX/include/openssl" "$HIDDEN_OPENSSL"
-+    fi
++    # adb 必须用仓库里的 BoringSSL，且必须用自带的 protobuf 28.3 与配套
++    # abseil；Homebrew 的 openssl / absl / google 目录会抢在前面，编译期间
++    # 临时藏起来，结束后恢复。
++    HIDDEN_BREW_INCLUDES=""
++    for brew_inc in openssl absl google; do
++        if [ -d "$BREW_PREFIX/include/$brew_inc" ]; then
++            mv "$BREW_PREFIX/include/$brew_inc" "$BREW_PREFIX/include/$brew_inc.scrcpy-hidden"
++            HIDDEN_BREW_INCLUDES="$HIDDEN_BREW_INCLUDES $brew_inc"
++        fi
++    done
 +
 +    set +e
-+    make -C porting adb-mobile
++    make -C "$ADB_MOBILE/porting" adb/iphoneos/arm64
 +    ADB_STATUS=$?
++    if [ "$ADB_STATUS" -eq 0 ]; then
++        rm -f "$ADB_OUT/libadb-full.a"
++        (cd "$ADB_OUT" && libtool -static -o libadb-full.a *.a)
++        ADB_STATUS=$?
++    fi
++    if [ "$ADB_STATUS" -eq 0 ]; then
++        mkdir -p "$ADB_MOBILE/output/include"
++        cp -av "$ADB_MOBILE/porting/adb/include/"*.h "$ADB_MOBILE/output/include/"
++        ADB_STATUS=$?
++    fi
 +    set -e
 +
-+    if [ -n "$HIDDEN_OPENSSL" ]; then
-+        mv "$HIDDEN_OPENSSL" "$BREW_PREFIX/include/openssl"
-+    fi
++    for brew_inc in $HIDDEN_BREW_INCLUDES; do
++        if [ -d "$BREW_PREFIX/include/$brew_inc.scrcpy-hidden" ]; then
++            mv "$BREW_PREFIX/include/$brew_inc.scrcpy-hidden" "$BREW_PREFIX/include/$brew_inc"
++        fi
++    done
 +    for absl_log in $ABSL_LOG_FILES; do
 +        if [ -f "$absl_log.scrcpy-backup" ]; then
 +            mv "$absl_log.scrcpy-backup" "$absl_log"
 +        fi
 +    done
 +    [ "$ADB_STATUS" -eq 0 ] || fail "libadb 编译失败"
++
++    cp -av "$ADB_OUT/libadb-full.a" porting/libs/iphoneos/arm64/
++    cp -av "$ADB_MOBILE/output/include/adb_public.h" porting/libs/include/
 +
 +    log "[5/8] 编译 SDL3"
 +    make -C porting libsdl
