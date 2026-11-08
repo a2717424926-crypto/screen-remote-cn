@@ -1617,23 +1617,18 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..21f599f
+index 0000000..15632b7
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,190 @@
-+#!/usr/bin/env bash
+@@ -0,0 +1,177 @@
++﻿#!/usr/bin/env bash
 +#
-+# 构建未签名的 Scrcpy Remote IPA。
++# 鏋勫缓鏈鍚嶇殑 Scrcpy Remote IPA銆?#
++# 杩愯鐜锛歮acOS + Xcode 16锛坕OS 18 SDK锛? Homebrew 宸ュ叿閾俱€?# 浜х墿锛歜uild/unsigned/Scrcpy-Remote-unsigned.ipa
 +#
-+# 运行环境：macOS + Xcode 16（iOS 18 SDK）+ Homebrew 工具链。
-+# 产物：build/unsigned/Scrcpy-Remote-unsigned.ipa
++# 鐢ㄦ硶锛?#   bash scripts/build-unsigned-ipa.sh
 +#
-+# 用法：
-+#   bash scripts/build-unsigned-ipa.sh
-+#
-+# 第一次运行会编译 OpenSSL / libvncclient / libadb / SDL3 / FFmpeg / scrcpy，
-+# 大约需要 1.5 - 3 小时，请预留足够时间和磁盘空间（约 15 GB）。
-+#
++# 绗竴娆¤繍琛屼細缂栬瘧 OpenSSL / libvncclient / libadb / SDL3 / FFmpeg / scrcpy锛?# 澶х害闇€瑕?1.5 - 3 灏忔椂锛岃棰勭暀瓒冲鏃堕棿鍜岀鐩樼┖闂达紙绾?15 GB锛夈€?#
 +set -euo pipefail
 +
 +ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -1645,14 +1640,14 @@ index 0000000..21f599f
 +IPA="$BUILD_DIR/Scrcpy-Remote-unsigned.ipa"
 +
 +log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
-+fail() { printf '\n\033[1;31m错误：%s\033[0m\n' "$*" >&2; exit 1; }
++fail() { printf '\n\033[1;31m閿欒锛?s\033[0m\n' "$*" >&2; exit 1; }
 +
 +for cmd in git make cmake ninja meson pkg-config protoc go xcodebuild zip ditto curl; do
-+    command -v "$cmd" >/dev/null 2>&1 || fail "缺少命令：$cmd"
++    command -v "$cmd" >/dev/null 2>&1 || fail "缂哄皯鍛戒护锛?cmd"
 +done
 +
 +if ! command -v gas-preprocessor.pl >/dev/null 2>&1; then
-+    log "下载 gas-preprocessor.pl（FFmpeg 交叉编译需要）"
++    log "涓嬭浇 gas-preprocessor.pl锛團Fmpeg 浜ゅ弶缂栬瘧闇€瑕侊級"
 +    mkdir -p "$ROOT/build/tools"
 +    curl -fsSL https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/master/gas-preprocessor.pl \
 +        -o "$ROOT/build/tools/gas-preprocessor.pl"
@@ -1660,8 +1655,7 @@ index 0000000..21f599f
 +    export PATH="$ROOT/build/tools:$PATH"
 +fi
 +
-+# adb-mobile 的 Makefile 会往这些目录里拷贝静态库，先建好。
-+mkdir -p \
++# adb-mobile 鐨?Makefile 浼氬線杩欎簺鐩綍閲屾嫹璐濋潤鎬佸簱锛屽厛寤哄ソ銆?mkdir -p \
 +    porting/libs/iphoneos/arm64 \
 +    porting/libs/iphonesimulator/arm64 \
 +    porting/libs/iphonesimulator/x86_64 \
@@ -1679,31 +1673,27 @@ index 0000000..21f599f
 +done
 +
 +if [ "$NATIVE_READY" = "1" ]; then
-+    log "检测到已缓存的依赖库，跳过原生编译"
++    log "妫€娴嬪埌宸茬紦瀛樼殑渚濊禆搴擄紝璺宠繃鍘熺敓缂栬瘧"
 +else
-+    log "[1/8] 初始化子模块（首次约 5-10 分钟）"
++    log "[1/8] 鍒濆鍖栧瓙妯″潡锛堥娆＄害 5-10 鍒嗛挓锛?
 +    git submodule update --init --recursive
 +
-+    # adb-mobile 的 CMake 配置需要能正常运行的 protoc 和 Protobuf 的
-+    # CMake 包。官方 protoc 在 /tmp/protoc/bin，Homebrew 只提供 host
-+    # 的 libprotobuf/CMake 配置。把这个路径显式传给 adb 的 CMake。
-+    ADB_DEFINES="external/adb-mobile/porting/scripts/defines.sh"
++    # adb-mobile 鐨?CMake 閰嶇疆闇€瑕佽兘姝ｅ父杩愯鐨?protoc 鍜?Protobuf 鐨?    # CMake 鍖呫€傚畼鏂?protoc 鍦?/tmp/protoc/bin锛孒omebrew 鍙彁渚?host
++    # 鐨?libprotobuf/CMake 閰嶇疆銆傛妸杩欎釜璺緞鏄惧紡浼犵粰 adb 鐨?CMake銆?    ADB_DEFINES="external/adb-mobile/porting/scripts/defines.sh"
 +    if [ -f "$ADB_DEFINES" ]; then
 +        BREW_PREFIX="$(brew --prefix)"
-+        printf '\nCMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=/tmp/protoc/bin/protoc"\n' \
++        printf '\nCMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=/opt/homebrew/bin/protoc"\n' \
 +            "$BREW_PREFIX" >> "$ADB_DEFINES"
 +    fi
 +
-+    log "[2/8] 编译 OpenSSL"
++    log "[2/8] 缂栬瘧 OpenSSL"
 +    make -C porting openssl
 +
-+    log "[3/8] 编译 libvncclient"
++    log "[3/8] 缂栬瘧 libvncclient"
 +    make -C porting vncclient
 +
-+    log "[4/8] 编译 libadb（首次约 15-25 分钟）"
-+    # 现代 abseil 与仓库里 pin 的 adb 源码日志宏不兼容（ABSL_LOG 展开成
-+    # 未定义标识符）。放一个只覆盖 absl/log 的 no-op shim 到 include 最前面。
-+    ABSL_STUB="$PWD/build/adb-absl-stub"
++    log "[4/8] 缂栬瘧 libadb锛堥娆＄害 15-25 鍒嗛挓锛?
++    # 鐜颁唬 abseil 涓庝粨搴撻噷 pin 鐨?adb 婧愮爜鏃ュ織瀹忎笉鍏煎锛圓BSL_LOG 灞曞紑鎴?    # 鏈畾涔夋爣璇嗙锛夈€傛斁涓€涓彧瑕嗙洊 absl/log 鐨?no-op shim 鍒?include 鏈€鍓嶉潰銆?    ABSL_STUB="$PWD/build/adb-absl-stub"
 +    mkdir -p "$ABSL_STUB/absl/log"
 +    cat > "$ABSL_STUB/absl/log/log.h" <<'ABSL_EOF'
 +#pragma once
@@ -1735,10 +1725,8 @@ index 0000000..21f599f
 +        cp "$ABSL_STUB/absl/log/log.h" "$HOMEBREW_ABSL_LOG"
 +    fi
 +
-+    # Homebrew protobuf 把 /opt/homebrew/include 带进编译路径，那里同时有
-+    # Homebrew 的 OpenSSL 头；adb 必须用仓库里的 BoringSSL，否则
-+    # openssl/xxx 会和 bssl 冲突。编译 libadb 期间临时藏起它。
-+    HIDDEN_OPENSSL=""
++    # Homebrew protobuf 鎶?/opt/homebrew/include 甯﹁繘缂栬瘧璺緞锛岄偅閲屽悓鏃舵湁
++    # Homebrew 鐨?OpenSSL 澶达紱adb 蹇呴』鐢ㄤ粨搴撻噷鐨?BoringSSL锛屽惁鍒?    # openssl/xxx 浼氬拰 bssl 鍐茬獊銆傜紪璇?libadb 鏈熼棿涓存椂钘忚捣瀹冦€?    HIDDEN_OPENSSL=""
 +    if [ -d "$BREW_PREFIX/include/openssl" ]; then
 +        HIDDEN_OPENSSL="$BREW_PREFIX/include/openssl.scrcpy-hidden"
 +        mv "$BREW_PREFIX/include/openssl" "$HIDDEN_OPENSSL"
@@ -1755,17 +1743,15 @@ index 0000000..21f599f
 +            mv "$absl_log.scrcpy-backup" "$absl_log"
 +        fi
 +    done
-+    [ "$ADB_STATUS" -eq 0 ] || fail "libadb 编译失败"
++    [ "$ADB_STATUS" -eq 0 ] || fail "libadb 缂栬瘧澶辫触"
 +
-+    log "[5/8] 编译 SDL3"
++    log "[5/8] 缂栬瘧 SDL3"
 +    make -C porting libsdl
 +
-+    log "[6/8] 编译 FFmpeg（首次约 30-50 分钟）"
++    log "[6/8] 缂栬瘧 FFmpeg锛堥娆＄害 30-50 鍒嗛挓锛?
 +    make -C porting ffmpeg
 +
-+    # make-ffmpeg.sh 只把 .a / include 拷进 porting/libs，没有带 pkg-config 文件；
-+    # scrcpy 的 meson 配置会报 "Dependency libavformat not found"。这里补上。
-+    log "复制 FFmpeg pkg-config 文件（scrcpy meson 配置需要）"
++    # make-ffmpeg.sh 鍙妸 .a / include 鎷疯繘 porting/libs锛屾病鏈夊甫 pkg-config 鏂囦欢锛?    # scrcpy 鐨?meson 閰嶇疆浼氭姤 "Dependency libavformat not found"銆傝繖閲岃ˉ涓娿€?    log "澶嶅埗 FFmpeg pkg-config 鏂囦欢锛坰crcpy meson 閰嶇疆闇€瑕侊級"
 +    mkdir -p porting/libs/lib/pkgconfig
 +    for ff_prefix in \
 +        porting/build/ffmpeg/iphoneos-arm64 \
@@ -1776,14 +1762,14 @@ index 0000000..21f599f
 +        fi
 +    done
 +
-+    log "[7/8] 编译 scrcpy 静态库"
++    log "[7/8] 缂栬瘧 scrcpy 闈欐€佸簱"
 +    make -C porting scrcpy
 +
-+    log "[8/8] 编译 Tailscale tsnet"
++    log "[8/8] 缂栬瘧 Tailscale tsnet"
 +    make -C porting tsnet-forwarder
 +fi
 +
-+log "归档（关闭签名）"
++log "褰掓。锛堝叧闂鍚嶏級"
 +rm -rf "$ARCHIVE" "$BUILD_DIR/Payload" "$IPA"
 +mkdir -p "$BUILD_DIR"
 +
@@ -1802,12 +1788,13 @@ index 0000000..21f599f
 +    ENABLE_BITCODE=NO
 +
 +APP="$ARCHIVE/Products/Applications/$APP_NAME"
-+[[ -d "$APP" ]] || fail "归档里找不到 $APP"
++[[ -d "$APP" ]] || fail "褰掓。閲屾壘涓嶅埌 $APP"
 +
-+log "打包未签名 IPA"
++log "鎵撳寘鏈鍚?IPA"
 +mkdir -p "$BUILD_DIR/Payload"
 +ditto "$APP" "$BUILD_DIR/Payload/$APP_NAME"
 +(cd "$BUILD_DIR" && zip -qry "$(basename "$IPA")" Payload)
 +
-+log "完成：$IPA"
-+echo "把 IPA 用 Sideloadly / AltStore / esign 等工具用自己的证书签名后即可安装。"
++log "瀹屾垚锛?IPA"
++echo "鎶?IPA 鐢?Sideloadly / AltStore / esign 绛夊伐鍏风敤鑷繁鐨勮瘉涔︾鍚嶅悗鍗冲彲瀹夎銆?
++
