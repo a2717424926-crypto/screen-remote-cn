@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..a69637d
+index 0000000..ff0464e
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,347 @@
+@@ -0,0 +1,380 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1699,7 +1699,7 @@ index 0000000..a69637d
 +    [ -n "$PROTOC_BIN" ] || PROTOC_BIN="$BREW_PREFIX/bin/protoc"
 +    if [ -f "$ADB_DEFINES" ]; then
 +        printf '
-+CMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=%s"
++CMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=%s -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_TESTS=OFF"
 +' "$BREW_PREFIX" "$PROTOC_BIN" >> "$ADB_DEFINES"
 +    fi
 +
@@ -1794,12 +1794,16 @@ index 0000000..a69637d
 +            log "adb 依赖 $dep 已有产物，跳过重建"
 +            return 0
 +        fi
-+        make -C "$ADB_MOBILE/porting" "$dep/iphoneos/arm64"
++        # 上游脚本在上游 CI 之外可能失败（例如 zstd 的 CMake 流程），
++        # 这里不中断，交给后面的产物校验统一判断。
++        make -C "$ADB_MOBILE/porting" "$dep/iphoneos/arm64" \
++            || log "adb 依赖 $dep 构建返回非零，稍后统一校验"
++        return 0
 +    }
 +    build_adb_dep lz4 "liblz4.a"
 +    build_adb_dep zstd "libzstd.a"
-+    build_adb_dep brotli "libbrotli*.a"
-+    if ls "$ADB_OUT"/libabsl_*.a >/dev/null 2>&1 && [ -f "$ADB_OUT/libprotobuf.a" ]; then
++    build_adb_dep brotli "libbrotli*-static.a"
++    if [ -f "$ADB_OUT/libprotobuf.a" ]; then
 +        log "adb 依赖 protobuf 已有产物，仅校正源码版本"
 +        ( cd "$ADB_PROTOBUF" && git checkout -q v28.3 && git submodule -q update --init --recursive ) \
 +            || fail "无法把内置 protobuf 切换到 v28.3"
@@ -1809,12 +1813,41 @@ index 0000000..a69637d
 +        make -C "$ADB_MOBILE/porting" protobuf/iphoneos/arm64
 +    fi
 +
++    # 被 pin 的 make-zstd.sh 还没有关掉 zstd 的命令行程序，CMake 在
++    # programs/CMakeLists.txt 会直接报错（install TARGETS ... BUNDLE），
++    # 从而完全不产出 libzstd.a。这里用它自己的 lib/ 源码直接编译。
++    if [ ! -f "$ADB_OUT/libzstd.a" ]; then
++        log "zstd 的 CMake 流程没有产出库，改为直接编译 libzstd.a"
++        ZSTD_LIB="$ADB_MOBILE/external/zstd/lib"
++        ZSTD_OBJ="$ROOT/build/zstd-arm64"
++        [ -d "$ZSTD_LIB/compress" ] || fail "找不到 zstd 源码：${ZSTD_LIB}"
++        rm -rf "$ZSTD_OBJ"
++        mkdir -p "$ZSTD_OBJ"
++        ZSTD_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
++        ZSTD_CLANG="$(xcrun --sdk iphoneos --find clang)"
++        (
++            cd "$ZSTD_LIB"
++            for zdir in common compress decompress dictBuilder; do
++                for zsrc in "$zdir"/*.c; do
++                    [ -f "$zsrc" ] || continue
++                    "$ZSTD_CLANG" -arch arm64 -miphoneos-version-min=15.0 \
++                        -isysroot "$ZSTD_SDK" -O2 -DZSTD_MULTITHREAD \
++                        -Icommon -I. -c "$zsrc" \
++                        -o "$ZSTD_OBJ/$(echo "$zsrc" | tr '/' '_').o" || exit 1
++                done
++            done
++        ) || fail "zstd 源码编译失败"
++        libtool -static -o "$ADB_OUT/libzstd.a" "$ZSTD_OBJ"/*.o \
++            || fail "zstd 静态库合并失败"
++    fi
++
 +    # 这些静态库必须真的出现在 output/iphoneos/arm64，否则 libtool 合并出来
-+    # 的 libadb-full.a 会缺 zstd / protobuf / absl 符号，直到 Xcode 链接才报错。
++    # 的 libadb-full.a 会缺 zstd / protobuf 符号，直到 Xcode 链接才报错。
++    # 注意：abseil 是被编进 libprotobuf.a 的（见 CMakeLists.protobuf.txt），
++    # 不会单独产出 libabsl_*.a。
 +    for required_lib in libzstd.a liblz4.a libprotobuf.a; do
 +        [ -f "$ADB_OUT/$required_lib" ] || fail "adb 依赖缺少 ${required_lib}（${ADB_OUT}）"
 +    done
-+    ls "$ADB_OUT"/libabsl_*.a >/dev/null 2>&1 || fail "adb 依赖缺少 abseil 静态库"
 +
 +    swap_header_dir google "$ADB_PROTOBUF_SRC/google" "$BREW_GOOGLE"
 +    swap_header_dir absl "$ADB_ABSL_SRC/absl" "$BREW_ABSL"
