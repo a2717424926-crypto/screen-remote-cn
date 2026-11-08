@@ -32,7 +32,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install ninja meson pkg-config go fmt googletest nasm
+          brew install ninja meson pkg-config go fmt googletest nasm protobuf
           # adb-mobile pins protobuf 28.3. Homebrew's 28.3 bottle is linked
           # against the 2024 abseil and crashes with the current one, so use
           # the official self-contained protoc binary instead.
@@ -62,8 +62,22 @@ jobs:
             go mod tidy
           fi
 
+      - name: Restore native dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: porting/libs
+          key: native-deps-v3-${{ runner.os }}
+
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
+
+      - name: Save native dependencies
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: porting/libs
+          key: native-deps-v3-${{ runner.os }}
 
       - name: Publish release asset
         env:
