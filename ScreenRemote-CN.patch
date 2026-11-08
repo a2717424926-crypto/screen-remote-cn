@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..cf42602
+index 0000000..dc8ada1
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,273 @@
+@@ -0,0 +1,288 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1867,6 +1867,21 @@ index 0000000..cf42602
 +fi
 +
 +log "归档（关闭签名）"
++
++# scrcpy 的 app/config.h 是 meson 在构建目录 scrcpy/x 里生成的，只提供
++# SCRCPY_VERSION 一个宏；它不在 porting/libs 缓存里，命中缓存时构建目录
++# 不存在，Xcode 归档会报 'app/config.h' file not found。
++SCRCPY_VER="$(git -C scrcpy describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
++case "$SCRCPY_VER" in
++    ''|*[!0-9.]*) SCRCPY_VER="4.0" ;;
++esac
++mkdir -p porting/libs/include/app scrcpy/x/app
++cat > porting/libs/include/app/config.h <<CFG_EOF
++#pragma once
++#define SCRCPY_VERSION "$SCRCPY_VER"
++CFG_EOF
++cp -f porting/libs/include/app/config.h scrcpy/x/app/config.h
++
 +rm -rf "$ARCHIVE" "$BUILD_DIR/Payload" "$IPA"
 +mkdir -p "$BUILD_DIR"
 +
