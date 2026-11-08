@@ -33,12 +33,12 @@ jobs:
       - name: Install build tools
         run: |
           brew install ninja meson pkg-config go fmt googletest nasm protobuf
-          curl -fsSL -o /tmp/protoc.zip \
+          curl -fsSL --retry 5 --retry-delay 5 -o /tmp/protoc.zip \
             https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-osx-aarch_64.zip
           unzip -q /tmp/protoc.zip -d /tmp/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
-          curl -fsSL -o /tmp/cmake.tar.gz \
+          curl -fsSL --retry 5 --retry-delay 5 -o /tmp/cmake.tar.gz \
             https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
           tar -xzf /tmp/cmake.tar.gz -C /tmp
           echo "/tmp/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
@@ -78,6 +78,7 @@ jobs:
           gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
             --title "Screen Remote 中文版（未签名 IPA）" \
             --notes "自动构建产物，未签名，请使用自己的证书签名后安装。"
+
 
 
 
