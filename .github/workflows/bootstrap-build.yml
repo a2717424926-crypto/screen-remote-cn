@@ -33,10 +33,14 @@ jobs:
       - name: Install build tools
         run: |
           brew install ninja meson pkg-config go fmt googletest nasm protobuf
-          python3 -m venv /tmp/protoc-venv
-          /tmp/protoc-venv/bin/pip install --quiet grpcio-tools==1.68.1
-          mkdir -p /tmp/protoc/bin
-          printf '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "libprotoc 28.3"; exit 0; fi\nexec /tmp/protoc-venv/bin/python -m grpc_tools.protoc "$@"\n' > /tmp/protoc/bin/protoc
+          # protoc must be 28.3 to match the bundled protobuf 28.3 static lib
+          # and headers. grpcio-tools' protoc has no C++ generator (--cpp_out
+          # looks for a protoc-gen-cpp plugin), so use the official 28.3 build.
+          curl -fsSL --retry 5 --retry-delay 5 \
+            -o /tmp/protoc28.zip \
+            https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-osx-aarch_64.zip
+          mkdir -p /tmp/protoc
+          unzip -q -o /tmp/protoc28.zip -d /tmp/protoc
           chmod +x /tmp/protoc/bin/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
           /tmp/protoc/bin/protoc --version
