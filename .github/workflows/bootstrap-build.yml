@@ -52,9 +52,7 @@ jobs:
 
       - name: Prepare tsnet go.mod
         run: |
-          # 根目录 .gitignore 的 *.mod* 把 porting/libtsnet/go.mod 一起忽略了，
-          # 上游仓库里只有 go.sum。这里按源码里的 module 路径补出来。
-          if [ ! -f porting/libtsnet/go.mod ]; then
+          # 鏍圭洰褰?.gitignore 鐨?*.mod* 鎶?porting/libtsnet/go.mod 涓€璧峰拷鐣ヤ簡锛?          # 涓婃父浠撳簱閲屽彧鏈?go.sum銆傝繖閲屾寜婧愮爜閲岀殑 module 璺緞琛ュ嚭鏉ャ€?          if [ ! -f porting/libtsnet/go.mod ]; then
             cd porting/libtsnet
             go mod init me.wsen.scrcpy-tsnet
             go mod edit -go=1.23
@@ -66,7 +64,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: porting/libs
-          key: native-deps-v3-${{ runner.os }}
+          key: native-deps-v4-${{ runner.os }}
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
@@ -77,12 +75,13 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: porting/libs
-          key: native-deps-v3-${{ runner.os }}
+          key: native-deps-v4-${{ runner.os }}
 
       - name: Publish release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
-            --title "Screen Remote 中文版（未签名 IPA）" \
-            --notes "自动构建产物，未签名，请使用自己的证书签名后安装。"
+            --title "Screen Remote 涓枃鐗堬紙鏈鍚?IPA锛? \
+            --notes "鑷姩鏋勫缓浜х墿锛屾湭绛惧悕锛岃浣跨敤鑷繁鐨勮瘉涔︾鍚嶅悗瀹夎銆?
+
