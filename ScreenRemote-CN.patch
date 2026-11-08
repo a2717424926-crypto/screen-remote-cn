@@ -218,6 +218,148 @@ index 0000000..9c1107e
 +3. 最小化后 App 仍在后台解码，耗电与不最小化时接近；不想耗电请直接断开连接。
 +4. 没有修改 App 图标、启动图、Bundle ID。
 +5. 本项目基于 MIT 协议的 scrcpy-mobile；scrcpy 本体为 Apache-2.0，LibVNCClient 为 GPL，分发时请遵守对应协议。
+diff --git a/porting/src/adb-safe-porting.cpp b/porting/src/adb-safe-porting.cpp
+index 8ae18c8..79a51fd 100644
+--- a/porting/src/adb-safe-porting.cpp
++++ b/porting/src/adb-safe-porting.cpp
+@@ -1,61 +1,76 @@
+-//
+-//  adb-safe-porting.cpp
+-//  scrcpy-module
+-//
+-//  Catches C++ exceptions thrown from inside the in-tree ADB code so they
+-//  do not propagate up into Objective-C frames and SIGABRT the process.
+-//
+-//  Field crash motivating this wrapper:
+-//      Thread 0:
+-//        std::__1::thread::join()                          (thread.cpp:49)
+-//        (anonymous namespace)::ReconnectHandler::Stop()   (transport.cpp:174)
+-//        kick_all_transports()                             (transport.cpp:800)
+-//        adb_server_cleanup()                              (main.cpp:67)
+-//        launch_server()                                   (main.cpp:279)
+-//        adb_commandline()                                 (commandline.cpp)
+-//        adb_commandline_porting()
+-//        -[ADBClient executeADBCommandUnderlying:returnCode:]
+-//
+-//  std::thread::join() throws std::system_error if the thread handle is in a
+-//  bad state (e.g. the ReconnectHandler worker has already exited / been
+-//  detached by another shutdown path). adb-mobile is `external/` and not ours
+-//  to patch — so we wrap the boundary instead and surface the failure as a
+-//  non-zero return code, matching how every adb shell error already flows.
+-//
+-
+-#include <cstring>
+-#include <exception>
+-
+-extern "C" {
+-#include "adb_public.h"
+-
+-int adb_commandline_porting_safe(char **output_buffer,
+-                                 size_t *output_buffer_size,
+-                                 int argc,
+-                                 const char **argv);
+-}
+-
+-int adb_commandline_porting_safe(char **output_buffer,
+-                                 size_t *output_buffer_size,
+-                                 int argc,
+-                                 const char **argv) {
+-    try {
+-        return adb_commandline_porting(output_buffer, output_buffer_size, argc, argv);
+-    } catch (const std::exception &e) {
+-        const char *what = e.what() ? e.what() : "(unknown std::exception)";
+-        fprintf(stderr,
+-                "[adb-safe] adb_commandline_porting threw std::exception: %s\n",
+-                what);
+-        if (output_buffer && !*output_buffer) {
+-            *output_buffer = strdup(what);
+-            if (output_buffer_size) {
+-                *output_buffer_size = strlen(what);
+-            }
+-        }
+-        return -1;
+-    } catch (...) {
+-        fprintf(stderr,
+-                "[adb-safe] adb_commandline_porting threw unknown C++ exception\n");
+-        return -1;
+-    }
+-}
++//
++//  adb-safe-porting.cpp
++//  scrcpy-module
++//
++//  Catches C++ exceptions thrown from inside the in-tree ADB code so they
++//  do not propagate up into Objective-C frames and SIGABRT the process.
++//
++//  Field crash motivating this wrapper:
++//      Thread 0:
++//        std::__1::thread::join()                          (thread.cpp:49)
++//        (anonymous namespace)::ReconnectHandler::Stop()   (transport.cpp:174)
++//        kick_all_transports()                             (transport.cpp:800)
++//        adb_server_cleanup()                              (main.cpp:67)
++//        launch_server()                                   (main.cpp:279)
++//        adb_commandline()                                 (commandline.cpp)
++//        adb_commandline_porting()
++//        -[ADBClient executeADBCommandUnderlying:returnCode:]
++//
++//  std::thread::join() throws std::system_error if the thread handle is in a
++//  bad state (e.g. the ReconnectHandler worker has already exited / been
++//  detached by another shutdown path). adb-mobile is `external/` and not ours
++//  to patch — so we wrap the boundary instead and surface the failure as a
++//  non-zero return code, matching how every adb shell error already flows.
++//
++
++#include <cstring>
++#include <exception>
++
++extern "C" {
++#include "adb_public.h"
++
++int adb_commandline_porting_safe(char **output_buffer,
++                                 size_t *output_buffer_size,
++                                 int argc,
++                                 const char **argv);
++}
++
++// adb-mobile configures its CMake project *before* copying adb_porting.cpp
++// into android-tools/vendor/adb, so some pinned revisions build libadb-full.a
++// without the adb_commandline_porting wrapper. Declare the patched C++ entry
++// point and provide a weak C wrapper; if the library does export a strong
++// symbol, the linker still prefers it.
++int adb_commandline(char **out_buf, size_t *out_buf_size, int argc, const char **argv);
++
++extern "C" __attribute__((weak))
++int adb_commandline_porting(char **output_buffer,
++                            size_t *output_buffer_size,
++                            int argc,
++                            const char **argv) {
++    return adb_commandline(output_buffer, output_buffer_size, argc, argv);
++}
++
++int adb_commandline_porting_safe(char **output_buffer,
++                                 size_t *output_buffer_size,
++                                 int argc,
++                                 const char **argv) {
++    try {
++        return adb_commandline_porting(output_buffer, output_buffer_size, argc, argv);
++    } catch (const std::exception &e) {
++        const char *what = e.what() ? e.what() : "(unknown std::exception)";
++        fprintf(stderr,
++                "[adb-safe] adb_commandline_porting threw std::exception: %s\n",
++                what);
++        if (output_buffer && !*output_buffer) {
++            *output_buffer = strdup(what);
++            if (output_buffer_size) {
++                *output_buffer_size = strlen(what);
++            }
++        }
++        return -1;
++    } catch (...) {
++        fprintf(stderr,
++                "[adb-safe] adb_commandline_porting threw unknown C++ exception\n");
++        return -1;
++    }
++}
 diff --git a/scrcpy-app/ADBClient/ScrcpyRuntime.m b/scrcpy-app/ADBClient/ScrcpyRuntime.m
 index 8205815..dadcd2c 100644
 --- a/scrcpy-app/ADBClient/ScrcpyRuntime.m
