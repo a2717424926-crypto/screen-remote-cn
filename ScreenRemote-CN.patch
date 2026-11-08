@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..04997a0
+index 0000000..2e31f50
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,311 @@
+@@ -0,0 +1,318 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1757,23 +1757,25 @@ index 0000000..04997a0
 +#include "log.h"
 +ABSL_EOF
 +
-+    # 关键：CMake 生成的编译命令里 $(CXX_INCLUDES) 排在 $(CXX_FLAGS) 之前，
-+    # 所以把 -I 塞进 CMAKE_CXX_FLAGS 是抢不过 /opt/homebrew/include 的。
-+    # make-adb.sh 本来就会把 BoringSSL/fmt 前缀拼到 flags.make 的
-+    # CXX_INCLUDES 开头，这里在同一处再前置仓库自带的 protobuf / abseil，
-+    # 保证 .pb.cc 用的头文件和 protoc 生成代码、最终静态库都是 28.3。
++    # 关键：adb 的编译命令把 /opt/homebrew/include 放进 -I（来自
++    # find_package(Protobuf)），而且各版本 make-adb.sh 里 -I 的前后顺序
++    # 不可控。与其改脚本，不如直接把 Homebrew 的 google/ 和 absl/ 头目录
++    # 临时软链到仓库自带版本（protobuf 28.3 / abseil 20240722），这样无论
++    # 谁先被搜索到，拿到的都是同一套头文件，与 protoc、静态库完全一致。
 +    ADB_PROTOBUF_SRC="$ADB_PROTOBUF/src"
 +    ADB_ABSL_SRC="$ADB_PROTOBUF/third_party/abseil-cpp"
-+    export ADB_PROTOBUF_SRC ADB_ABSL_SRC
-+    if [ -f "$ADB_MAKE" ]; then
-+        python3 -c 'import sys
-+p = sys.argv[1]
-+s = open(p).read()
-+old = "CXX_INCLUDES = -I$BORINGSSL_DIR/include"
-+new = "CXX_INCLUDES = -I$ADB_PROTOBUF_SRC -I$ADB_ABSL_SRC -I$BORINGSSL_DIR/include"
-+assert old in s, "make-adb.sh anchor not found"
-+open(p, "w").write(s.replace(old, new))' "$ADB_MAKE"
-+    fi
++    BREW_GOOGLE="$BREW_PREFIX/include/google"
++    BREW_ABSL="$BREW_PREFIX/include/absl"
++    SWAPPED_HEADERS=""
++    swap_header_dir() {
++        local name="$1" src="$2" dst="$3"
++        [ -d "$src" ] || fail "找不到仓库自带头文件：$src"
++        if [ -e "$dst" ] && [ ! -L "$dst" ]; then
++            mv "$dst" "$dst.scrcpy-hidden"
++        fi
++        ln -sfn "$src" "$dst"
++        SWAPPED_HEADERS="$SWAPPED_HEADERS $name"
++    }
 +
 +    # 只需要真机 arm64；模拟器库对归档没有用，省掉两份编译。
 +    log "编译 adb 依赖（lz4 / zstd / brotli / protobuf 28.3，仅 iphoneos/arm64）"
@@ -1790,23 +1792,21 @@ index 0000000..04997a0
 +    done
 +    ls "$ADB_OUT"/libabsl_*.a >/dev/null 2>&1 || fail "adb 依赖缺少 abseil 静态库"
 +
++    swap_header_dir google "$ADB_PROTOBUF_SRC/google" "$BREW_GOOGLE"
++    swap_header_dir absl "$ADB_ABSL_SRC/absl" "$BREW_ABSL"
++
 +    # protobuf 已经编完，现在可以安全地把 abseil 的 log.h 换成 no-op：
 +    # adb 源码的日志宏在新版 abseil 下编不过，而 libprotobuf 不会再重编，
 +    # 所以不会像上一轮那样把 protobuf 自己搞崩。
-+    ABSL_LOG_FILES=""
-+    for absl_log in \
-+        "$BREW_PREFIX/include/absl/log/log.h" \
-+        "$ADB_PROTOBUF/third_party/abseil-cpp/absl/log/log.h"; do
-+        if [ -f "$absl_log" ]; then
-+            cp "$absl_log" "$absl_log.scrcpy-backup"
-+            cp "$ABSL_STUB/absl/log/log.h" "$absl_log"
-+            ABSL_LOG_FILES="$ABSL_LOG_FILES $absl_log"
-+        fi
-+    done
++    # 注意：$BREW_ABSL 此时是软链，改 vendored 那一个文件即可同时生效。
++    STUBBED_ABSL_LOG="$ADB_ABSL_SRC/absl/log/log.h"
++    if [ -f "$STUBBED_ABSL_LOG" ]; then
++        cp "$STUBBED_ABSL_LOG" "$STUBBED_ABSL_LOG.scrcpy-backup"
++        cp "$ABSL_STUB/absl/log/log.h" "$STUBBED_ABSL_LOG"
++    fi
 +
 +    # adb 必须用仓库里的 BoringSSL；Homebrew 的 openssl 头文件目录会抢在
-+    # 前面，编译期间临时藏起来，结束后恢复。（protobuf/abseil 不藏，改由
-+    # flags.make 里前置 -I 来保证优先级。）
++    # 前面，编译期间临时藏起来，结束后恢复。
 +    HIDDEN_BREW_INCLUDES=""
 +    for brew_inc in openssl; do
 +        if [ -d "$BREW_PREFIX/include/$brew_inc" ]; then
@@ -1844,9 +1844,16 @@ index 0000000..04997a0
 +            mv "$BREW_PREFIX/include/$brew_inc.scrcpy-hidden" "$BREW_PREFIX/include/$brew_inc"
 +        fi
 +    done
-+    for absl_log in $ABSL_LOG_FILES; do
-+        if [ -f "$absl_log.scrcpy-backup" ]; then
-+            mv "$absl_log.scrcpy-backup" "$absl_log"
++    if [ -f "$STUBBED_ABSL_LOG.scrcpy-backup" ]; then
++        mv "$STUBBED_ABSL_LOG.scrcpy-backup" "$STUBBED_ABSL_LOG"
++    fi
++    for header_name in $SWAPPED_HEADERS; do
++        header_dst="$BREW_PREFIX/include/$header_name"
++        if [ -L "$header_dst" ]; then
++            rm -f "$header_dst"
++        fi
++        if [ -d "$header_dst.scrcpy-hidden" ]; then
++            mv "$header_dst.scrcpy-hidden" "$header_dst"
 +        fi
 +    done
 +    [ "$ADB_STATUS" -eq 0 ] || fail "libadb 编译失败"
