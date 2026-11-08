@@ -58,25 +58,54 @@ jobs:
       - name: Restore native dependencies (latest)
         uses: actions/cache/restore@v4
         with:
-          path: porting/libs
-          key: native-deps-v13-${{ runner.os }}
+          path: |
+            porting/libs
+            external/adb-mobile/output
+          key: native-deps-v14-${{ runner.os }}
 
       - name: Restore native dependencies (older)
         uses: actions/cache/restore@v4
         with:
-          path: porting/libs
+          path: |
+            porting/libs
+            external/adb-mobile/output
           key: native-deps-v12-${{ runner.os }}
 
       - name: Build unsigned IPA
-        run: bash scripts/build-unsigned-ipa.sh
+        run: |
+          set -o pipefail
+          mkdir -p build
+          bash scripts/build-unsigned-ipa.sh 2>&1 | tee build/build.log
+
+      - name: Build log tail
+        if: always()
+        run: |
+          if [ -f build/build.log ]; then
+            {
+              echo '```'
+              tail -n 200 build/build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload build log
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build/build.log
+          if-no-files-found: ignore
 
       - name: Save native dependencies
         if: always()
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
-          path: porting/libs
-          key: native-deps-v14-${{ runner.os }}
+          path: |
+            porting/libs
+            external/adb-mobile/output
+          key: native-deps-v15-${{ runner.os }}
 
       - name: Publish release asset
         env:
