@@ -50,6 +50,18 @@ jobs:
           echo "/tmp/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
           /tmp/cmake-3.31.6-macos-universal/CMake.app/Contents/bin/cmake --version
 
+      - name: Prepare tsnet go.mod
+        run: |
+          # 根目录 .gitignore 的 *.mod* 把 porting/libtsnet/go.mod 一起忽略了，
+          # 上游仓库里只有 go.sum。这里按源码里的 module 路径补出来。
+          if [ ! -f porting/libtsnet/go.mod ]; then
+            cd porting/libtsnet
+            go mod init me.wsen.scrcpy-tsnet
+            go mod edit -go=1.23
+            go get tailscale.com@v1.84.1
+            go mod tidy
+          fi
+
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
 
