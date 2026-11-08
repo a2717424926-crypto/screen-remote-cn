@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..e7e58eb
+index 0000000..6e5df53
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,467 @@
+@@ -0,0 +1,468 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1693,7 +1693,8 @@ index 0000000..e7e58eb
 +    # adb 的 .pb.cc 是在构建时由 CMake 调 protoc 现场生成的。protoc 的版本
 +    # 必须和最终链接的 libprotobuf.a（仓库自带 28.3）一致，否则生成的代码
 +    # 会要求 36.x 的运行时符号，链接时报一堆 google::protobuf::* 未定义。
-+    # workflow 用 grpcio-tools 提供 28.x 的 protoc，并放在 PATH 最前面。
++    # workflow 用 protobuf 官方 28.3 预编译二进制，并放在 PATH 最前面。
++    # 注意：grpcio-tools 自带的 protoc 没有 C++ 生成器，不能用。
 +    ADB_DEFINES="external/adb-mobile/porting/scripts/defines.sh"
 +    PROTOC_BIN="$(command -v protoc || true)"
 +    [ -n "$PROTOC_BIN" ] || PROTOC_BIN="$BREW_PREFIX/bin/protoc"
