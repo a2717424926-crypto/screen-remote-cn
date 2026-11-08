@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..1bef986
+index 0000000..78a3acc
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,136 @@
+@@ -0,0 +1,151 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1701,7 +1701,22 @@ index 0000000..1bef986
 +    make -C porting vncclient
 +
 +    log "[4/8] 编译 libadb（首次约 15-25 分钟）"
++    # Homebrew protobuf 把 /opt/homebrew/include 带进编译路径，那里同时有
++    # Homebrew 的 OpenSSL 头；adb 必须用仓库里的 BoringSSL，否则
++    # openssl/xxx 会和 bssl 冲突。编译 libadb 期间临时藏起它。
++    HIDDEN_OPENSSL=""
++    if [ -d "$BREW_PREFIX/include/openssl" ]; then
++        HIDDEN_OPENSSL="$BREW_PREFIX/include/openssl.scrcpy-hidden"
++        mv "$BREW_PREFIX/include/openssl" "$HIDDEN_OPENSSL"
++    fi
++    set +e
 +    make -C porting adb-mobile
++    ADB_STATUS=$?
++    set -e
++    if [ -n "$HIDDEN_OPENSSL" ]; then
++        mv "$HIDDEN_OPENSSL" "$BREW_PREFIX/include/openssl"
++    fi
++    [ "$ADB_STATUS" -eq 0 ] || fail "libadb 编译失败"
 +
 +    log "[5/8] 编译 SDL3"
 +    make -C porting libsdl
