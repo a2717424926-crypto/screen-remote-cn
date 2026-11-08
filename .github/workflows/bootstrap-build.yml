@@ -55,11 +55,17 @@ jobs:
             go mod tidy
           fi
 
-      - name: Restore native dependencies
+      - name: Restore native dependencies (latest)
         uses: actions/cache/restore@v4
         with:
           path: porting/libs
           key: native-deps-v13-${{ runner.os }}
+
+      - name: Restore native dependencies (older)
+        uses: actions/cache/restore@v4
+        with:
+          path: porting/libs
+          key: native-deps-v12-${{ runner.os }}
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
@@ -70,21 +76,13 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: porting/libs
-          key: native-deps-v13-${{ runner.os }}
+          key: native-deps-v14-${{ runner.os }}
 
       - name: Publish release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
-            --title "Screen Remote 濞戞搩鍘介弸鍐偋閸剛绀勯柡鍫簽椤掔兘宕?IPA闁? \
-            --notes "闁煎浜滄慨鈺呭几閸曨偆绱﹀ù婧犲懎鈷栭柨娑樻湰濠€顓犵驳閹勫€抽柨娑樼焷椤曨剚鎷呯捄銊︽殢闁煎浜滅换渚€鎯冮崟顔炬濞戞棑濡囬鐑藉触瀹ュ懏鍊甸悗鐟邦槼椤ュ﹪濡?
-
-
-
-
-
-
-
-
-
+          tag="cn-$(date +%Y%m%d-%H%M)"
+          gh release create "$tag" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
+            --title "Screen Remote CN $tag" \
+            --notes "Unsigned IPA. Sign it yourself with AltStore, Sideloadly or eSign."
