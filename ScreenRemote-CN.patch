@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..a33666b
+index 0000000..1bef986
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,136 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1667,42 +1667,67 @@ index 0000000..a33666b
 +    porting/libs/iphonesimulator/x86_64 \
 +    porting/libs/include
 +
-+log "[1/8] 初始化子模块（首次约 5-10 分钟）"
-+git submodule update --init --recursive
-+
-+log "[2/8] 编译 OpenSSL"
-+make -C porting openssl
-+
-+log "[3/8] 编译 libvncclient"
-+make -C porting vncclient
-+
-+log "[4/8] 编译 libadb（首次约 15-25 分钟）"
-+make -C porting adb-mobile
-+
-+log "[5/8] 编译 SDL3"
-+make -C porting libsdl
-+
-+log "[6/8] 编译 FFmpeg（首次约 30-50 分钟）"
-+make -C porting ffmpeg
-+
-+# make-ffmpeg.sh 只把 .a / include 拷进 porting/libs，没有带 pkg-config 文件；
-+# scrcpy 的 meson 配置会报 "Dependency libavformat not found"。这里补上。
-+log "复制 FFmpeg pkg-config 文件（scrcpy meson 配置需要）"
-+mkdir -p porting/libs/lib/pkgconfig
-+for ff_prefix in \
-+    porting/build/ffmpeg/iphoneos-arm64 \
-+    porting/build/ffmpeg/iphonesimulator-arm64 \
-+    porting/build/ffmpeg/iphonesimulator-x86_64; do
-+    if [ -d "$ff_prefix/lib/pkgconfig" ]; then
-+        cp -f "$ff_prefix"/lib/pkgconfig/*.pc porting/libs/lib/pkgconfig/ 2>/dev/null || true
-+    fi
++NATIVE_READY=1
++for native_lib in \
++    porting/libs/iphoneos/arm64/libadb-full.a \
++    porting/libs/iphoneos/arm64/libscrcpy.a \
++    porting/libs/iphoneos/arm64/libSDL3.a \
++    porting/libs/iphoneos/arm64/libavformat.a \
++    porting/libs/iphoneos/arm64/libvncclient.a \
++    porting/libs/iphoneos/arm64/libtsnet-forwarder.a; do
++    [ -f "$native_lib" ] || NATIVE_READY=0
 +done
 +
-+log "[7/8] 编译 scrcpy 静态库"
-+make -C porting scrcpy
++if [ "$NATIVE_READY" = "1" ]; then
++    log "检测到已缓存的依赖库，跳过原生编译"
++else
++    log "[1/8] 初始化子模块（首次约 5-10 分钟）"
++    git submodule update --init --recursive
 +
-+log "[8/8] 编译 Tailscale tsnet"
-+make -C porting tsnet-forwarder
++    # adb-mobile 的 CMake 配置需要能正常运行的 protoc 和 Protobuf 的
++    # CMake 包。官方 protoc 在 /tmp/protoc/bin，Homebrew 只提供 host
++    # 的 libprotobuf/CMake 配置。把这个路径显式传给 adb 的 CMake。
++    ADB_DEFINES="external/adb-mobile/porting/scripts/defines.sh"
++    if [ -f "$ADB_DEFINES" ]; then
++        BREW_PREFIX="$(brew --prefix)"
++        printf '\nCMAKE_COMPAT_FLAGS="$CMAKE_COMPAT_FLAGS -DCMAKE_PREFIX_PATH=%s -DProtobuf_PROTOC_EXECUTABLE=/tmp/protoc/bin/protoc"\n' \
++            "$BREW_PREFIX" >> "$ADB_DEFINES"
++    fi
++
++    log "[2/8] 编译 OpenSSL"
++    make -C porting openssl
++
++    log "[3/8] 编译 libvncclient"
++    make -C porting vncclient
++
++    log "[4/8] 编译 libadb（首次约 15-25 分钟）"
++    make -C porting adb-mobile
++
++    log "[5/8] 编译 SDL3"
++    make -C porting libsdl
++
++    log "[6/8] 编译 FFmpeg（首次约 30-50 分钟）"
++    make -C porting ffmpeg
++
++    # make-ffmpeg.sh 只把 .a / include 拷进 porting/libs，没有带 pkg-config 文件；
++    # scrcpy 的 meson 配置会报 "Dependency libavformat not found"。这里补上。
++    log "复制 FFmpeg pkg-config 文件（scrcpy meson 配置需要）"
++    mkdir -p porting/libs/lib/pkgconfig
++    for ff_prefix in \
++        porting/build/ffmpeg/iphoneos-arm64 \
++        porting/build/ffmpeg/iphonesimulator-arm64 \
++        porting/build/ffmpeg/iphonesimulator-x86_64; do
++        if [ -d "$ff_prefix/lib/pkgconfig" ]; then
++            cp -f "$ff_prefix"/lib/pkgconfig/*.pc porting/libs/lib/pkgconfig/ 2>/dev/null || true
++        fi
++    done
++
++    log "[7/8] 编译 scrcpy 静态库"
++    make -C porting scrcpy
++
++    log "[8/8] 编译 Tailscale tsnet"
++    make -C porting tsnet-forwarder
++fi
 +
 +log "归档（关闭签名）"
 +rm -rf "$ARCHIVE" "$BUILD_DIR/Payload" "$IPA"
