@@ -1617,10 +1617,10 @@ index 435deb6..5ef4aed 100644
  		<string>com.scrcpy.remote.background-refresh</string>
 diff --git a/scripts/build-unsigned-ipa.sh b/scripts/build-unsigned-ipa.sh
 new file mode 100644
-index 0000000..fc907f1
+index 0000000..21f599f
 --- /dev/null
 +++ b/scripts/build-unsigned-ipa.sh
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,190 @@
 +#!/usr/bin/env bash
 +#
 +# 构建未签名的 Scrcpy Remote IPA。
@@ -1724,20 +1724,16 @@ index 0000000..fc907f1
 +        perl -0pi -e 's{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL="}{-DCMAKE_CXX_FLAGS="-DFMT_CONSTEVAL= -I'"$ABSL_STUB"'"}' "$ADB_MAKE"
 +    fi
 +
-+    # Replace every abseil log.h the adb build might pick up, so the macro
-+    # definitely resolves to the no-op shim. Restore after the build.
++    # Replace only Homebrew's abseil log.h (the one the adb compile uses).
++    # Do NOT touch the abseil source bundled with protobuf: it is compiled
++    # into libprotobuf and needs the real logging macros.
 +    ABSL_LOG_FILES=""
-+    for absl_log in \
-+        "$(brew --prefix)/include/absl/log/log.h" \
-+        "$PWD/external/adb-mobile/external/protobuf/third_party/abseil-cpp/absl/log/log.h" \
-+        $(find "$PWD/external/adb-mobile" -path '*/absl/log/log.h' 2>/dev/null); do
-+        [ -f "$absl_log" ] && ABSL_LOG_FILES="$ABSL_LOG_FILES $absl_log"
-+    done
-+    ABSL_LOG_FILES="$(printf '%s\n' $ABSL_LOG_FILES | sort -u)"
-+    for absl_log in $ABSL_LOG_FILES; do
-+        cp "$absl_log" "$absl_log.scrcpy-backup"
-+        cp "$ABSL_STUB/absl/log/log.h" "$absl_log"
-+    done
++    HOMEBREW_ABSL_LOG="$(brew --prefix)/include/absl/log/log.h"
++    if [ -f "$HOMEBREW_ABSL_LOG" ]; then
++        ABSL_LOG_FILES="$HOMEBREW_ABSL_LOG"
++        cp "$HOMEBREW_ABSL_LOG" "$HOMEBREW_ABSL_LOG.scrcpy-backup"
++        cp "$ABSL_STUB/absl/log/log.h" "$HOMEBREW_ABSL_LOG"
++    fi
 +
 +    # Homebrew protobuf 把 /opt/homebrew/include 带进编译路径，那里同时有
 +    # Homebrew 的 OpenSSL 头；adb 必须用仓库里的 BoringSSL，否则
