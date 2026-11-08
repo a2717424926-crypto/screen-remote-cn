@@ -58,7 +58,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: porting/libs
-          key: native-deps-v5-${{ runner.os }}
+          key: native-deps-v6-${{ runner.os }}
 
       - name: Build unsigned IPA
         run: bash scripts/build-unsigned-ipa.sh
@@ -69,7 +69,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: porting/libs
-          key: native-deps-v5-${{ runner.os }}
+          key: native-deps-v6-${{ runner.os }}
 
       - name: Publish release asset
         env:
@@ -78,3 +78,4 @@ jobs:
           gh release create "cn-$(date +%Y%m%d-%H%M)" "build/unsigned/Scrcpy-Remote-unsigned.ipa" \
             --title "Screen Remote 中文版（未签名 IPA）" \
             --notes "自动构建产物，未签名，请使用自己的证书签名后安装。"
+
