@@ -417,7 +417,7 @@ index 8205815..eba0c78 100644
  
      // Set frame format to YUV420P
 diff --git a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj b/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj
-index 92ac171..cd234f0 100644
+index 92ac171..0fd78e8 100644
 --- a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj	
 +++ b/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj	
 @@ -796,10 +796,10 @@
@@ -429,8 +429,8 @@ index 92ac171..cd234f0 100644
  				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 -				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app does not use Bluetooth. Bluetooth permission is required by linked frameworks but no Bluetooth functionality is accessed.";
 -				INFOPLIST_KEY_NSCameraUsageDescription = "This app does not access the camera. Camera permission is required by underlying frameworks for video processing and display of remote device screens.";
-+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "鏈簲鐢ㄤ笉浣跨敤钃濈墮銆傝鏉冮檺鐢辨墍閾炬帴鐨勬鏋惰姹傦紝浣嗕笉浼氳闂换浣曡摑鐗欏姛鑳姐€?;
-+				INFOPLIST_KEY_NSCameraUsageDescription = "鏈簲鐢ㄤ笉璁块棶鎽勫儚澶淬€傝鏉冮檺鐢卞簳灞傛鏋剁敤浜庤棰戝鐞嗗拰杩滅鐢婚潰鏄剧ず锛屼笉浼氳闂憚鍍忓ご銆?;
++				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "本应用不使用蓝牙。该权限由所链接的框架要求，但不会访问任何蓝牙功能。";
++				INFOPLIST_KEY_NSCameraUsageDescription = "本应用不访问摄像头。该权限由底层框架用于视频处理和远端画面显示，不会访问摄像头。";
  				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
  				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
  				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -456,8 +456,8 @@ index 92ac171..cd234f0 100644
  				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 -				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app does not use Bluetooth. Bluetooth permission is required by linked frameworks but no Bluetooth functionality is accessed.";
 -				INFOPLIST_KEY_NSCameraUsageDescription = "This app does not access the camera. Camera permission is required by underlying frameworks for video processing and display of remote device screens.";
-+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "鏈簲鐢ㄤ笉浣跨敤钃濈墮銆傝鏉冮檺鐢辨墍閾炬帴鐨勬鏋惰姹傦紝浣嗕笉浼氳闂换浣曡摑鐗欏姛鑳姐€?;
-+				INFOPLIST_KEY_NSCameraUsageDescription = "鏈簲鐢ㄤ笉璁块棶鎽勫儚澶淬€傝鏉冮檺鐢卞簳灞傛鏋剁敤浜庤棰戝鐞嗗拰杩滅鐢婚潰鏄剧ず锛屼笉浼氳闂憚鍍忓ご銆?;
++				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "本应用不使用蓝牙。该权限由所链接的框架要求，但不会访问任何蓝牙功能。";
++				INFOPLIST_KEY_NSCameraUsageDescription = "本应用不访问摄像头。该权限由底层框架用于视频处理和远端画面显示，不会访问摄像头。";
  				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
  				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
  				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
