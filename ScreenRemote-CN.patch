@@ -361,7 +361,7 @@ index 8ae18c8..79a51fd 100644
 +    }
 +}
 diff --git a/scrcpy-app/ADBClient/ScrcpyRuntime.m b/scrcpy-app/ADBClient/ScrcpyRuntime.m
-index 8205815..dadcd2c 100644
+index 8205815..d45be63 100644
 --- a/scrcpy-app/ADBClient/ScrcpyRuntime.m
 +++ b/scrcpy-app/ADBClient/ScrcpyRuntime.m
 @@ -12,6 +12,7 @@
@@ -386,6 +386,20 @@ index 8205815..dadcd2c 100644
          // Get rendering layer first to check its status
          AVSampleBufferDisplayLayer *displayLayer = GetSampleBufferDisplayLayer();
          if (!displayLayer) {
+@@ -448,7 +456,12 @@ AVFrame * ScrcpyHandleFrame(AVFrame *frame) {
+         RenderPixelBufferFrame(pixelBuffer);
+         return frame;
+     }
+-    
++
++    // Software-decoding path (hardware decoding disabled): still feed the
++    // Sessions-screen preview, otherwise the card stays empty when the user
++    // turns hardware decoding off.
++    [[ScrcpyPreviewManager shared] capturePixelBuffer:pixelBuffer];
++
+     CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+ 
+     // Set frame format to YUV420P
 diff --git a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj b/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj
 index 92ac171..94405cb 100644
 --- a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj	
@@ -1175,10 +1189,10 @@ index 7c113c1..5819978 100644
  
                              Text("Receives MP3 audio stream over TCP. Increase buffer if audio breaks.")
 diff --git a/scrcpy-app/Scrcpy Remote/SessionManager.swift b/scrcpy-app/Scrcpy Remote/SessionManager.swift
-index 6a9abd6..d70c805 100644
+index 6a9abd6..2da7d6f 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionManager.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionManager.swift	
-@@ -8,6 +8,11 @@
+@@ -8,6 +8,12 @@
  import KeychainSwift
  import Foundation
  import Security
@@ -1186,11 +1200,12 @@ index 6a9abd6..d70c805 100644
 +import Combine
 +import QuartzCore
 +import CoreVideo
++import CoreImage
 +import VideoToolbox
  
  // VNC压缩等级枚举
  enum VNCCompressionLevel: String, Codable, CaseIterable {
-@@ -909,3 +914,132 @@ class SessionManager {
+@@ -909,3 +915,158 @@ class SessionManager {
          return getActionsForDeviceAndType(deviceId, deviceType: deviceType)
      }
  }
@@ -1232,6 +1247,12 @@ index 6a9abd6..d70c805 100644
 +    private let lock = NSLock()
 +    private var _isActive = false
 +    private var lastCaptureTime: CFTimeInterval = 0
++    private var _attemptCount = 0
++
++    /// Number of decoder frames seen while the preview image was still empty.
++    /// Shown on the session card so a broken capture path is visible instead of
++    /// silently producing an empty card.
++    @Published private(set) var frameCount: Int = 0
 +
 +    private override init() {
 +        super.init()
@@ -1258,21 +1279,27 @@ index 6a9abd6..d70c805 100644
 +    /// pixel buffer. Copying it to another queue would require retaining a
 +    /// buffer whose lifetime belongs to the AVFrame.
 +    @objc func capturePixelBuffer(_ pixelBuffer: CVPixelBuffer) {
-+        guard isActive else { return }
-+
 +        let now = CACurrentMediaTime()
 +        lock.lock()
 +        let due = (now - lastCaptureTime) >= 0.25   // at most 4 fps
 +        if due {
 +            lastCaptureTime = now
++            _attemptCount += 1
 +        }
++        let attempts = _attemptCount
 +        lock.unlock()
 +        guard due else { return }
 +
-+        guard let image = Self.makeImage(from: pixelBuffer) else { return }
++        let image = Self.makeImage(from: pixelBuffer)
 +        DispatchQueue.main.async { [weak self] in
-+            guard let self = self, self.isActive else { return }
-+            self.image = image
++            guard let self = self else { return }
++            if let image = image {
++                self.image = image
++            } else if self.image == nil {
++                // Surface “frames arrive but conversion failed” on the card
++                // instead of silently showing nothing.
++                self.frameCount = attempts
++            }
 +        }
 +    }
 +
@@ -1294,7 +1321,16 @@ index 6a9abd6..d70c805 100644
 +    private static func makeImage(from pixelBuffer: CVPixelBuffer) -> UIImage? {
 +        var fullImage: CGImage?
 +        let status = VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &fullImage)
-+        guard status == noErr, let full = fullImage else { return nil }
++        let full: CGImage
++        if status == noErr, let videoImage = fullImage {
++            full = videoImage
++        } else if let ciImage = makeImageViaCoreImage(pixelBuffer) {
++            // Some hardware decoders hand back formats VideoToolbox refuses to
++            // convert directly; Core Image understands them.
++            full = ciImage
++        } else {
++            return nil
++        }
 +
 +        // Downscale before handing the frame to SwiftUI: a 110pt-tall card does
 +        // not need a full 1080p+ frame every tick.
@@ -1322,9 +1358,14 @@ index 6a9abd6..d70c805 100644
 +        guard let scaled = context.makeImage() else { return nil }
 +        return UIImage(cgImage: scaled)
 +    }
++
++    private static func makeImageViaCoreImage(_ pixelBuffer: CVPixelBuffer) -> CGImage? {
++        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
++        return CIContext().createCGImage(ciImage, from: ciImage.extent)
++    }
 +}
 diff --git a/scrcpy-app/Scrcpy Remote/SessionsView.swift b/scrcpy-app/Scrcpy Remote/SessionsView.swift
-index 77aed3e..2f04327 100644
+index 77aed3e..5bd177d 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionsView.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionsView.swift	
 @@ -93,6 +93,17 @@ struct SessionsView: View {
@@ -1402,18 +1443,21 @@ index 77aed3e..2f04327 100644
                          }
                          .background(Color.clear)
                          .cornerRadius(10)
-@@ -156,6 +189,27 @@ struct SessionsView: View {
+@@ -156,6 +189,30 @@ struct SessionsView: View {
                              .padding(),
                              alignment: .topTrailing
                          )
 +                        .overlay(alignment: .bottomLeading) {
-+                            // 已连接会话：显示“实时画面”角标，提示点击可恢复全屏
-+                            if isLiveSession(session), previewManager.image != nil {
++                            // 已连接会话：没有画面时也显示状态，避免“什么都没变”
++                            // 的错觉，同时能直接看出是否收到了解码帧。
++                            if isLiveSession(session) {
 +                                HStack(spacing: 6) {
 +                                    Circle()
-+                                        .fill(Color.red)
++                                        .fill(previewManager.image != nil ? Color.red : Color.orange)
 +                                        .frame(width: 7, height: 7)
-+                                    Text("实时画面")
++                                    Text(previewManager.image != nil
++                                         ? "实时画面"
++                                         : "已连接 · 等待画面 \(previewManager.frameCount)")
 +                                        .font(.caption2)
 +                                        .bold()
 +                                        .foregroundColor(.white)
@@ -1430,7 +1474,7 @@ index 77aed3e..2f04327 100644
                          .overlay(
                              RoundedRectangle(cornerRadius: 10)
                                  .stroke(Color.white.opacity(0.3), lineWidth: 0)
-@@ -165,6 +219,14 @@ struct SessionsView: View {
+@@ -165,6 +222,14 @@ struct SessionsView: View {
                      .padding(8)
                      .listRowSeparator(.hidden)
                      .contextMenu {
@@ -1445,7 +1489,7 @@ index 77aed3e..2f04327 100644
                          Button(action: {
                              onConnectSession?(session)
                          }) {
-@@ -240,7 +302,7 @@ struct SessionsView: View {
+@@ -240,7 +305,7 @@ struct SessionsView: View {
          .alert(isPresented: $showingDeleteAlert) {
              Alert(
                  title: Text("Delete Session"),
@@ -1454,7 +1498,7 @@ index 77aed3e..2f04327 100644
                  primaryButton: .destructive(Text("Delete")) {
                      if let session = sessionToDelete {
                          // Remove from UI immediately for responsive feedback
-@@ -259,7 +321,7 @@ struct SessionsView: View {
+@@ -259,7 +324,7 @@ struct SessionsView: View {
          .alert("URL Scheme Copied", isPresented: $showingCopyConfirmation) {
              Button("OK") { }
          } message: {
