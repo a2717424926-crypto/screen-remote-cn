@@ -1365,10 +1365,10 @@ index 6a9abd6..2da7d6f 100644
 +    }
 +}
 diff --git a/scrcpy-app/Scrcpy Remote/SessionsView.swift b/scrcpy-app/Scrcpy Remote/SessionsView.swift
-index 77aed3e..5bd177d 100644
+index 77aed3e..baa273f 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionsView.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionsView.swift	
-@@ -93,6 +93,17 @@ struct SessionsView: View {
+@@ -93,6 +93,18 @@ struct SessionsView: View {
      @State private var lastSessionsHash: Int = 0
      @State private var autoTestEnabled: Bool = true
  
@@ -1377,16 +1377,17 @@ index 77aed3e..5bd177d 100644
 +    @ObservedObject private var previewManager = ScrcpyPreviewManager.shared
 +
 +    /// 该会话是否处于已连接状态（包括已最小化、正在主页显示实时预览的情况）
++    /// 只按“当前会话”判断，不再叠加连接状态，避免连接状态机与窗口状态不同步时
++    /// 预览整块失效。
 +    private func isLiveSession(_ session: ScrcpySession) -> Bool {
 +        guard let current = connectionManager.currentSession else { return false }
 +        return current.id == session.id
-+            && connectionManager.connectionStatus.isFullyConnected
 +    }
 +
      var body: some View {
          Group {
              if savedSessions.isEmpty {
-@@ -115,21 +126,43 @@ struct SessionsView: View {
+@@ -115,21 +127,43 @@ struct SessionsView: View {
              } else {
                  List(savedSessions) { session in
                      ZStack {
@@ -1443,7 +1444,7 @@ index 77aed3e..5bd177d 100644
                          }
                          .background(Color.clear)
                          .cornerRadius(10)
-@@ -156,6 +189,30 @@ struct SessionsView: View {
+@@ -156,6 +190,30 @@ struct SessionsView: View {
                              .padding(),
                              alignment: .topTrailing
                          )
@@ -1474,7 +1475,7 @@ index 77aed3e..5bd177d 100644
                          .overlay(
                              RoundedRectangle(cornerRadius: 10)
                                  .stroke(Color.white.opacity(0.3), lineWidth: 0)
-@@ -165,6 +222,14 @@ struct SessionsView: View {
+@@ -165,6 +223,14 @@ struct SessionsView: View {
                      .padding(8)
                      .listRowSeparator(.hidden)
                      .contextMenu {
@@ -1489,7 +1490,7 @@ index 77aed3e..5bd177d 100644
                          Button(action: {
                              onConnectSession?(session)
                          }) {
-@@ -240,7 +305,7 @@ struct SessionsView: View {
+@@ -240,7 +306,7 @@ struct SessionsView: View {
          .alert(isPresented: $showingDeleteAlert) {
              Alert(
                  title: Text("Delete Session"),
@@ -1498,15 +1499,36 @@ index 77aed3e..5bd177d 100644
                  primaryButton: .destructive(Text("Delete")) {
                      if let session = sessionToDelete {
                          // Remove from UI immediately for responsive feedback
-@@ -259,7 +324,7 @@ struct SessionsView: View {
+@@ -259,9 +325,28 @@ struct SessionsView: View {
          .alert("URL Scheme Copied", isPresented: $showingCopyConfirmation) {
              Button("OK") { }
          } message: {
 -            Text("URL scheme has been copied to clipboard:\n\n\(copiedURLScheme)")
 +            Text(String(format: NSLocalizedString("URL scheme has been copied to clipboard:\n\n%@", comment: "Copied URL scheme message"), copiedURLScheme))
++        }
++        // Diagnostic strip: shows what the session card is working with. It is
++        // intentionally always visible so a failure is never silent.
++        .overlay(alignment: .top) {
++            Text(diagnosticSummary)
++                .font(.system(size: 10, design: .monospaced))
++                .foregroundColor(.white)
++                .padding(.horizontal, 8)
++                .padding(.vertical, 3)
++                .background(Color.black.opacity(0.65), in: Capsule())
++                .padding(.top, 2)
          }
      }
++
++    private var diagnosticSummary: String {
++        let cur = connectionManager.currentSession.map { String($0.id.uuidString.prefix(8)) } ?? "nil"
++        let status = connectionManager.connectionStatus.rawValue
++        let hasImage = previewManager.image == nil ? 0 : 1
++        let minimized = ScrcpyIsMirrorWindowMinimized() ? 1 : 0
++        return "cur=\(cur) st=\(status) min=\(minimized) img=\(hasImage) n=\(previewManager.frameCount)"
++    }
      
+     // Create a duplicate session with a new UUID and numbered suffix
+     private func createDuplicateSession(from originalSession: ScrcpySession) -> ScrcpySession {
 diff --git a/scrcpy-app/Scrcpy Remote/SettingsView.swift b/scrcpy-app/Scrcpy Remote/SettingsView.swift
 index 5ef9921..584438b 100644
 --- a/scrcpy-app/Scrcpy Remote/SettingsView.swift	
