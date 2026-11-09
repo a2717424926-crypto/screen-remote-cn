@@ -361,10 +361,10 @@ index 8ae18c8..79a51fd 100644
 +    }
 +}
 diff --git a/scrcpy-app/ADBClient/ScrcpyRuntime.m b/scrcpy-app/ADBClient/ScrcpyRuntime.m
-index 8205815..d45be63 100644
+index 8205815..eba0c78 100644
 --- a/scrcpy-app/ADBClient/ScrcpyRuntime.m
 +++ b/scrcpy-app/ADBClient/ScrcpyRuntime.m
-@@ -12,6 +12,7 @@
+@@ -12,9 +12,14 @@
  #import <math.h>
  #import <libavutil/frame.h>
  #import "ScrcpyRuntime.h"
@@ -372,7 +372,14 @@ index 8205815..d45be63 100644
  #import "scrcpy-porting.h"
  #import "app/config.h"
  
-@@ -246,6 +247,13 @@ void RenderPixelBufferFrame(CVPixelBufferRef pixelBuffer) {
++// Implemented in ScrcpyCommon.m (shared with the VNCClient framework, which is
++// why it is declared here instead of importing that header).
++BOOL ScrcpyIsMirrorWindowMinimized(void);
++
+ typedef enum : NSUInteger {
+     // 0: disable hardware decoding
+     ScrcpyHardwareDecodingDisabled = 0,
+@@ -246,6 +251,22 @@ void RenderPixelBufferFrame(CVPixelBufferRef pixelBuffer) {
          int frameHeight = (int)CVPixelBufferGetHeight(pixelBuffer);
          CheckAndNotifyOrientationChange(frameWidth, frameHeight);
  
@@ -383,10 +390,19 @@ index 8205815..d45be63 100644
 +        // preview is active, and it throttles itself.
 +        [[ScrcpyPreviewManager shared] capturePixelBuffer:pixelBuffer];
 +
++        // While minimised the layer is occluded and stops draining samples, so
++        // the stall watchdog below would treat that as a broken stream and keep
++        // restarting the video (which ends up tearing the session down). Feed
++        // only the preview in that state; the layer resumes on restore because
++        // the decoder keeps producing frames.
++        if (ScrcpyIsMirrorWindowMinimized()) {
++            return;
++        }
++
          // Get rendering layer first to check its status
          AVSampleBufferDisplayLayer *displayLayer = GetSampleBufferDisplayLayer();
          if (!displayLayer) {
-@@ -448,7 +456,12 @@ AVFrame * ScrcpyHandleFrame(AVFrame *frame) {
+@@ -448,7 +469,12 @@ AVFrame * ScrcpyHandleFrame(AVFrame *frame) {
          RenderPixelBufferFrame(pixelBuffer);
          return frame;
      }
@@ -401,17 +417,20 @@ index 8205815..d45be63 100644
  
      // Set frame format to YUV420P
 diff --git a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj b/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj
-index 92ac171..94405cb 100644
+index 92ac171..cd234f0 100644
 --- a/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj	
 +++ b/scrcpy-app/Scrcpy Remote.xcodeproj/project.pbxproj	
-@@ -798,8 +798,8 @@
+@@ -796,10 +796,10 @@
+ 					"$(SRCROOT)/../scrcpy/x",
+ 				);
  				INFOPLIST_FILE = "Scrcpy-Remote-Info.plist";
- 				INFOPLIST_KEY_CFBundleDisplayName = "Screen Remote";
+-				INFOPLIST_KEY_CFBundleDisplayName = "Screen Remote";
++				INFOPLIST_KEY_CFBundleDisplayName = "Screen Wall";
  				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 -				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app does not use Bluetooth. Bluetooth permission is required by linked frameworks but no Bluetooth functionality is accessed.";
 -				INFOPLIST_KEY_NSCameraUsageDescription = "This app does not access the camera. Camera permission is required by underlying frameworks for video processing and display of remote device screens.";
-+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "本应用不使用蓝牙。该权限由所链接的框架要求，但不会访问任何蓝牙功能。";
-+				INFOPLIST_KEY_NSCameraUsageDescription = "本应用不访问摄像头。该权限由底层框架用于视频处理和远端画面显示，不会访问摄像头。";
++				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "鏈簲鐢ㄤ笉浣跨敤钃濈墮銆傝鏉冮檺鐢辨墍閾炬帴鐨勬鏋惰姹傦紝浣嗕笉浼氳闂换浣曡摑鐗欏姛鑳姐€?;
++				INFOPLIST_KEY_NSCameraUsageDescription = "鏈簲鐢ㄤ笉璁块棶鎽勫儚澶淬€傝鏉冮檺鐢卞簳灞傛鏋剁敤浜庤棰戝鐞嗗拰杩滅鐢婚潰鏄剧ず锛屼笉浼氳闂憚鍍忓ご銆?;
  				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
  				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
  				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -428,14 +447,17 @@ index 92ac171..94405cb 100644
  					"-ltsnet-forwarder",
  					"-lavfilter",
  					"-lswscale",
-@@ -859,8 +859,8 @@
+@@ -857,10 +857,10 @@
+ 					"$(SRCROOT)/../scrcpy/x",
+ 				);
  				INFOPLIST_FILE = "Scrcpy-Remote-Info.plist";
- 				INFOPLIST_KEY_CFBundleDisplayName = "Screen Remote";
+-				INFOPLIST_KEY_CFBundleDisplayName = "Screen Remote";
++				INFOPLIST_KEY_CFBundleDisplayName = "Screen Wall";
  				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 -				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app does not use Bluetooth. Bluetooth permission is required by linked frameworks but no Bluetooth functionality is accessed.";
 -				INFOPLIST_KEY_NSCameraUsageDescription = "This app does not access the camera. Camera permission is required by underlying frameworks for video processing and display of remote device screens.";
-+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "本应用不使用蓝牙。该权限由所链接的框架要求，但不会访问任何蓝牙功能。";
-+				INFOPLIST_KEY_NSCameraUsageDescription = "本应用不访问摄像头。该权限由底层框架用于视频处理和远端画面显示，不会访问摄像头。";
++				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "鏈簲鐢ㄤ笉浣跨敤钃濈墮銆傝鏉冮檺鐢辨墍閾炬帴鐨勬鏋惰姹傦紝浣嗕笉浼氳闂换浣曡摑鐗欏姛鑳姐€?;
++				INFOPLIST_KEY_NSCameraUsageDescription = "鏈簲鐢ㄤ笉璁块棶鎽勫儚澶淬€傝鏉冮檺鐢卞簳灞傛鏋剁敤浜庤棰戝鐞嗗拰杩滅鐢婚潰鏄剧ず锛屼笉浼氳闂憚鍍忓ご銆?;
  				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
  				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
  				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1140,22 +1162,26 @@ index 57d2cc0..ef7f4d6 100644
  } 
 \ No newline at end of file
 diff --git a/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift b/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift
-index 64175ad..94a53f5 100644
+index 64175ad..fecf7a6 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionConnectionManager.swift	
-@@ -220,6 +220,11 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
+@@ -220,6 +220,15 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
                  // 我们用 .playback + .mixWithOthers 覆盖,与 scrcpy/VNC 音频共存）。
                  BackgroundKeepAliveManager.shared.sessionConnected()
  
 +                // 连接成功后就开始采集会话卡片的预览帧，而不是等到用户点
 +                // “最小化”才启动：这样无论用户以何种方式回到列表，卡片上
 +                // 都已经是最新画面。
-+                ScrcpyPreviewManager.shared.isActive = true
++                if let sessionID = self.currentSession?.id {
++                    ScrcpyPreviewManager.shared.begin(sessionID: sessionID)
++                } else {
++                    ScrcpyPreviewManager.shared.isActive = true
++                }
 +
                  // 连接成功后,如果启用了自动重连,保存当前会话
                  self.saveCurrentSessionIfAutoReconnectEnabled()
  
-@@ -755,6 +760,10 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
+@@ -755,6 +764,10 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
          isConnecting = false
          connectionStartTime = nil
  
@@ -1166,7 +1192,7 @@ index 64175ad..94a53f5 100644
          // Stop the silent-audio keep-alive engine if it was running —
          // there is nothing left to keep alive once the session is gone.
          BackgroundKeepAliveManager.shared.sessionDisconnected()
-@@ -905,7 +914,7 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
+@@ -905,7 +918,7 @@ typealias ActionConfirmationCallback = (ScrcpyAction, @escaping () -> Void) -> V
      /// 获取当前连接的描述信息
      var connectionDescription: String {
          guard let session = currentSession else {
@@ -1189,7 +1215,7 @@ index 7c113c1..5819978 100644
  
                              Text("Receives MP3 audio stream over TCP. Increase buffer if audio breaks.")
 diff --git a/scrcpy-app/Scrcpy Remote/SessionManager.swift b/scrcpy-app/Scrcpy Remote/SessionManager.swift
-index 6a9abd6..2da7d6f 100644
+index 6a9abd6..700cb64 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionManager.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionManager.swift	
 @@ -8,6 +8,12 @@
@@ -1205,7 +1231,7 @@ index 6a9abd6..2da7d6f 100644
  
  // VNC压缩等级枚举
  enum VNCCompressionLevel: String, Codable, CaseIterable {
-@@ -909,3 +915,158 @@ class SessionManager {
+@@ -909,3 +915,172 @@ class SessionManager {
          return getActionsForDeviceAndType(deviceId, deviceType: deviceType)
      }
  }
@@ -1224,6 +1250,10 @@ index 6a9abd6..2da7d6f 100644
 +
 +    /// Latest preview frame. Always published on the main thread.
 +    @Published private(set) var image: UIImage?
++
++    /// Session that produced `image`. Kept after disconnect so the grid can
++    /// still show the last frame as a thumbnail, like a device wall.
++    @Published private(set) var lastSessionID: UUID?
 +
 +    /// Whether frames should be captured. Only true while the live mirror is
 +    /// minimised to the Sessions screen, so the full-screen mirror pays nothing
@@ -1303,10 +1333,20 @@ index 6a9abd6..2da7d6f 100644
 +        }
 +    }
 +
++    /// Starts a new capture session for the given session id. Resets counters
++    /// but keeps the previous image until the first new frame arrives, so the
++    /// grid does not flash empty while connecting.
++    func begin(sessionID: UUID) {
++        lastSessionID = sessionID
++        frameCount = 0
++        isActive = true
++    }
++
 +    /// Stops capture and drops the current preview (called on disconnect).
 +    @objc func reset() {
 +        isActive = false
-+        clear()
++        // Intentionally keep `image` and `lastSessionID`: the grid keeps the
++        // last frame as a thumbnail after the device goes away.
 +    }
 +
 +    private func clear() {
@@ -1365,7 +1405,7 @@ index 6a9abd6..2da7d6f 100644
 +    }
 +}
 diff --git a/scrcpy-app/Scrcpy Remote/SessionsView.swift b/scrcpy-app/Scrcpy Remote/SessionsView.swift
-index 77aed3e..baa273f 100644
+index 77aed3e..685a2b4 100644
 --- a/scrcpy-app/Scrcpy Remote/SessionsView.swift	
 +++ b/scrcpy-app/Scrcpy Remote/SessionsView.swift	
 @@ -93,6 +93,18 @@ struct SessionsView: View {
@@ -1387,13 +1427,14 @@ index 77aed3e..baa273f 100644
      var body: some View {
          Group {
              if savedSessions.isEmpty {
-@@ -115,21 +127,43 @@ struct SessionsView: View {
+@@ -113,102 +125,21 @@ struct SessionsView: View {
+                         .multilineTextAlignment(.center)
+                 }
              } else {
-                 List(savedSessions) { session in
-                     ZStack {
+-                List(savedSessions) { session in
+-                    ZStack {
 -                        // 背景图片和渐变色的组合
-+                        // 背景图片和渐变色的组合（已连接会话显示实时画面）
-                         ZStack {
+-                        ZStack {
 -                            // 渐变背景色覆盖
 -                            session.backgroundColor
 -                                .frame(height: 110)
@@ -1402,95 +1443,107 @@ index 77aed3e..baa273f 100644
 -                            Image(session.deviceBackgroundImageName)
 -                                .resizable()
 -                                .scaledToFill()
-+                            if isLiveSession(session), let previewImage = previewManager.image {
-+                                // 实时画面预览
-+                                Image(uiImage: previewImage)
-+                                    .resizable()
-+                                    .scaledToFill()
-+                                    .frame(maxWidth: .infinity)
-+                                    .frame(height: 110)
-+                                    .clipped()
-+
-+                                // 压暗一点，保证标题和角标可读
-+                                LinearGradient(
-+                                    gradient: Gradient(colors: [
-+                                        Color.black.opacity(0.45),
-+                                        Color.black.opacity(0.05),
-+                                        Color.black.opacity(0.5)
-+                                    ]),
-+                                    startPoint: .top,
-+                                    endPoint: .bottom
-+                                )
-                                 .frame(height: 110)
+-                                .frame(height: 110)
 -                                .offset(y: session.backgroundImageOffset)
 -                                .opacity(0.08)
 -                                .clipped()
 -                                .foregroundStyle(.clear)
-+                            } else {
-+                                // 渐变背景色覆盖
-+                                session.backgroundColor
-+                                    .frame(height: 110)
-+
-+                                // 设备背景图片
-+                                Image(session.deviceBackgroundImageName)
-+                                    .resizable()
-+                                    .scaledToFill()
-+                                    .frame(height: 110)
-+                                    .offset(y: session.backgroundImageOffset)
-+                                    .opacity(0.08)
-+                                    .clipped()
-+                                    .foregroundStyle(.clear)
-+                            }
+-                        }
+-                        .background(Color.clear)
+-                        .cornerRadius(10)
+-                        .overlay(
+-                            // Left top corner: device type icon + title
+-                            HStack(spacing: 4) {
+-                                deviceTypeIcon(for: session)
+-                                Text(session.title)
+-                                    .font(.headline)
+-                                    .bold()
+-                                    .foregroundColor(.white)
+-                                    .lineLimit(1)
+-                                    .truncationMode(.tail)
+-                                    .frame(maxWidth: .infinity, alignment: .leading)
+-                            }
+-                            .padding(),
+-                            alignment: .topLeading
+-                        )
+-                        .overlay(
+-                            // Right bottom corner: device type text + latency test  
+-                            HStack(spacing: 2) {
+-                                latencyTestView(for: session)
+-                            }
+-                            .padding(),
+-                            alignment: .topTrailing
+-                        )
+-                        .overlay(
+-                            RoundedRectangle(cornerRadius: 10)
+-                                .stroke(Color.white.opacity(0.3), lineWidth: 0)
+-                        )
+-                    }
+-                    .listRowInsets(EdgeInsets())
+-                    .padding(8)
+-                    .listRowSeparator(.hidden)
+-                    .contextMenu {
+-                        Button(action: {
+-                            onConnectSession?(session)
+-                        }) {
+-                            Label("Connect Session", systemImage: "play")
+-                        }
+-                        Button(action: {
+-                            onEditSession?(session)
+-                        }) {
+-                            Label("Edit Session", systemImage: "pencil")
++                ScrollView {
++                    LazyVGrid(
++                        columns: [
++                            GridItem(.flexible(), spacing: 14),
++                            GridItem(.flexible(), spacing: 14)
++                        ],
++                        spacing: 18
++                    ) {
++                        ForEach(savedSessions) { session in
++                            sessionGridCell(session)
                          }
-                         .background(Color.clear)
-                         .cornerRadius(10)
-@@ -156,6 +190,30 @@ struct SessionsView: View {
-                             .padding(),
-                             alignment: .topTrailing
-                         )
-+                        .overlay(alignment: .bottomLeading) {
-+                            // 已连接会话：没有画面时也显示状态，避免“什么都没变”
-+                            // 的错觉，同时能直接看出是否收到了解码帧。
-+                            if isLiveSession(session) {
-+                                HStack(spacing: 6) {
-+                                    Circle()
-+                                        .fill(previewManager.image != nil ? Color.red : Color.orange)
-+                                        .frame(width: 7, height: 7)
-+                                    Text(previewManager.image != nil
-+                                         ? "实时画面"
-+                                         : "已连接 · 等待画面 \(previewManager.frameCount)")
-+                                        .font(.caption2)
-+                                        .bold()
-+                                        .foregroundColor(.white)
-+                                    Text("点击进入全屏")
-+                                        .font(.caption2)
-+                                        .foregroundColor(.white.opacity(0.85))
-+                                }
-+                                .padding(.horizontal, 9)
-+                                .padding(.vertical, 4)
-+                                .background(Color.black.opacity(0.35), in: Capsule())
-+                                .padding(10)
-+                            }
-+                        }
-                         .overlay(
-                             RoundedRectangle(cornerRadius: 10)
-                                 .stroke(Color.white.opacity(0.3), lineWidth: 0)
-@@ -165,6 +223,14 @@ struct SessionsView: View {
-                     .padding(8)
-                     .listRowSeparator(.hidden)
-                     .contextMenu {
-+                        if isLiveSession(session) {
-+                            Button(role: .destructive, action: {
-+                                SessionConnectionManager.shared.disconnectCurrent()
-+                            }) {
-+                                Label("断开连接", systemImage: "stop.circle")
-+                            }
-+                            Divider()
-+                        }
-                         Button(action: {
-                             onConnectSession?(session)
-                         }) {
-@@ -240,7 +306,7 @@ struct SessionsView: View {
+-                        Button(action: {
+-                            onDuplicateSession?(createDuplicateSession(from: session))
+-                        }) {
+-                            Label("Duplicate Session", systemImage: "doc.on.doc.fill")
+-                        }
+-                        Button(action: {
+-                            // Copy URL scheme to clipboard
+-                            let urlScheme = "scrcpy2://\(session.sessionModel.id.uuidString)"
+-                            UIPasteboard.general.string = urlScheme
+-                            
+-                            // Show confirmation feedback
+-                            copiedURLScheme = urlScheme
+-                            showingCopyConfirmation = true
+-                        }) {
+-                            Label("Copy URL Scheme", systemImage: "doc.on.doc")
+-                        }
+-                        Button(role: .destructive, action: {
+-                            sessionToDelete = session
+-                            showingDeleteAlert = true
+-                        }) {
+-                            Label("Delete Session", systemImage: "trash")
+-                        }
+-                    }
+-                    .onTapGesture {
+-                        onConnectSession?(session)
+                     }
+-                }
+-                .listStyle(.plain)
+-                .padding(.horizontal, 8)
+-                .safeAreaInset(edge: .top) {
+-                    Color.clear.frame(height: 2)
+-                }
+-                .safeAreaInset(edge: .bottom) {
+-                    Color.clear.frame(height: 2)
++                    .padding(.horizontal, 12)
++                    .padding(.top, 6)
++                    .padding(.bottom, 28)
+                 }
+                 .ignoresSafeArea(.container, edges: [.leading, .trailing])
+                 .refreshable {
+@@ -240,7 +171,7 @@ struct SessionsView: View {
          .alert(isPresented: $showingDeleteAlert) {
              Alert(
                  title: Text("Delete Session"),
@@ -1499,36 +1552,157 @@ index 77aed3e..baa273f 100644
                  primaryButton: .destructive(Text("Delete")) {
                      if let session = sessionToDelete {
                          // Remove from UI immediately for responsive feedback
-@@ -259,9 +325,28 @@ struct SessionsView: View {
+@@ -259,10 +190,149 @@ struct SessionsView: View {
          .alert("URL Scheme Copied", isPresented: $showingCopyConfirmation) {
              Button("OK") { }
          } message: {
 -            Text("URL scheme has been copied to clipboard:\n\n\(copiedURLScheme)")
 +            Text(String(format: NSLocalizedString("URL scheme has been copied to clipboard:\n\n%@", comment: "Copied URL scheme message"), copiedURLScheme))
-+        }
-+        // Diagnostic strip: shows what the session card is working with. It is
-+        // intentionally always visible so a failure is never silent.
-+        .overlay(alignment: .top) {
-+            Text(diagnosticSummary)
-+                .font(.system(size: 10, design: .monospaced))
-+                .foregroundColor(.white)
-+                .padding(.horizontal, 8)
-+                .padding(.vertical, 3)
-+                .background(Color.black.opacity(0.65), in: Capsule())
-+                .padding(.top, 2)
          }
      }
 +
-+    private var diagnosticSummary: String {
-+        let cur = connectionManager.currentSession.map { String($0.id.uuidString.prefix(8)) } ?? "nil"
-+        let status = connectionManager.connectionStatus.rawValue
-+        let hasImage = previewManager.image == nil ? 0 : 1
-+        let minimized = ScrcpyIsMirrorWindowMinimized() ? 1 : 0
-+        return "cur=\(cur) st=\(status) min=\(minimized) img=\(hasImage) n=\(previewManager.frameCount)"
-+    }
      
++    // MARK: - Device wall cell
++
++    @ViewBuilder
++    private func sessionGridCell(_ session: ScrcpySession) -> some View {
++        let isLive = connectionManager.currentSession?.id == session.id
++            && connectionManager.connectionStatus.isFullyConnected
++        let hasFrame = previewManager.lastSessionID == session.id && previewManager.image != nil
++
++        VStack(alignment: .leading, spacing: 8) {
++            ZStack {
++                if hasFrame, let frame = previewManager.image {
++                    Image(uiImage: frame)
++                        .resizable()
++                        .scaledToFill()
++                } else {
++                    session.backgroundColor
++
++                    Image(session.deviceBackgroundImageName)
++                        .resizable()
++                        .scaledToFill()
++                        .opacity(0.10)
++                        .foregroundStyle(.clear)
++
++                    VStack(spacing: 8) {
++                        deviceTypeIcon(for: session)
++                            .scaleEffect(1.4)
++                        Text(session.title)
++                            .font(.footnote)
++                            .foregroundColor(.white.opacity(0.85))
++                            .lineLimit(1)
++                    }
++                }
++            }
++            .frame(maxWidth: .infinity)
++            .frame(height: 210)
++            .clipped()
++            .clipShape(RoundedRectangle(cornerRadius: 12))
++            .overlay(alignment: .topLeading) {
++                HStack(spacing: 4) {
++                    deviceTypeIcon(for: session)
++                    Text(session.title)
++                        .font(.caption)
++                        .bold()
++                        .foregroundColor(.white)
++                        .lineLimit(1)
++                }
++                .padding(.horizontal, 8)
++                .padding(.vertical, 4)
++                .background(Color.black.opacity(0.28), in: Capsule())
++                .padding(8)
++            }
++            .overlay(alignment: .topTrailing) {
++                latencyTestView(for: session)
++                    .padding(8)
++            }
++            .overlay(alignment: .bottomLeading) {
++                if isLive {
++                    HStack(spacing: 5) {
++                        Circle()
++                            .fill(hasFrame ? Color.red : Color.orange)
++                            .frame(width: 6, height: 6)
++                        Text(hasFrame ? "实时" : "连接中")
++                            .font(.caption2)
++                            .bold()
++                            .foregroundColor(.white)
++                    }
++                    .padding(.horizontal, 8)
++                    .padding(.vertical, 3)
++                    .background(Color.black.opacity(0.35), in: Capsule())
++                    .padding(8)
++                }
++            }
++
++            HStack(spacing: 6) {
++                Circle()
++                    .fill(isLive ? Color.green : Color.gray)
++                    .frame(width: 8, height: 8)
++                Text(session.title)
++                    .font(.subheadline)
++                    .bold()
++                    .lineLimit(1)
++                    .truncationMode(.tail)
++                Spacer(minLength: 4)
++                Button {
++                    onEditSession?(session)
++                } label: {
++                    Image(systemName: "gearshape")
++                        .foregroundColor(.secondary)
++                }
++                .buttonStyle(.plain)
++            }
++            .padding(.horizontal, 4)
++        }
++        .contentShape(Rectangle())
++        .onTapGesture {
++            onConnectSession?(session)
++        }
++        .contextMenu {
++            if isLive {
++                Button(role: .destructive, action: {
++                    SessionConnectionManager.shared.disconnectCurrent()
++                }) {
++                    Label("断开连接", systemImage: "stop.circle")
++                }
++                Divider()
++            }
++            Button(action: {
++                onConnectSession?(session)
++            }) {
++                Label("Connect Session", systemImage: "play")
++            }
++            Button(action: {
++                onEditSession?(session)
++            }) {
++                Label("Edit Session", systemImage: "pencil")
++            }
++            Button(action: {
++                onDuplicateSession?(createDuplicateSession(from: session))
++            }) {
++                Label("Duplicate Session", systemImage: "doc.on.doc.fill")
++            }
++            Button(action: {
++                let urlScheme = "scrcpy2://\(session.sessionModel.id.uuidString)"
++                UIPasteboard.general.string = urlScheme
++                copiedURLScheme = urlScheme
++                showingCopyConfirmation = true
++            }) {
++                Label("Copy URL Scheme", systemImage: "doc.on.doc")
++            }
++            Button(role: .destructive, action: {
++                sessionToDelete = session
++                showingDeleteAlert = true
++            }) {
++                Label("Delete Session", systemImage: "trash")
++            }
++        }
++    }
++
      // Create a duplicate session with a new UUID and numbered suffix
      private func createDuplicateSession(from originalSession: ScrcpySession) -> ScrcpySession {
+         // Create a new session model based on the original
 diff --git a/scrcpy-app/Scrcpy Remote/SettingsView.swift b/scrcpy-app/Scrcpy Remote/SettingsView.swift
 index 5ef9921..584438b 100644
 --- a/scrcpy-app/Scrcpy Remote/SettingsView.swift	
